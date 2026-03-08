@@ -6,7 +6,7 @@
 -- ── WHITELIST ─────────────────────────────────────────────
 local Players     = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-if not ({["mairjdyr"]=true, ["omar_35412"]=true})[LocalPlayer.Name] then
+if not ({["mairjdyr"]=true})[LocalPlayer.Name] then
     warn("[CYBER//WEST] ACCESS DENIED"); return
 end
 
@@ -29,6 +29,7 @@ local S = {
     AnimalColor=Color3.fromRGB(255,200,0),
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
+    GodMode=false,
 }
 
 -- ── FOV CIRCLE ────────────────────────────────────────────
@@ -776,11 +777,6 @@ Run.RenderStepped:Connect(function()
         end
     end
 
-    if S.FullBright then
-        Light.ClockTime=14; Light.Brightness=2
-        Light.GlobalShadows=false; Light.FogEnd=100000
-    end
-
     if S.TPWalk then
         local c=LocalPlayer.Character; if c then
             local h=c:FindFirstChildOfClass("Humanoid")
@@ -789,33 +785,61 @@ Run.RenderStepped:Connect(function()
             end
         end
     end
+end)
 
-    -- player ESP
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p==LocalPlayer then continue end
-        local c=p.Character; if not c then continue end
-        local h=c:FindFirstChildOfClass("Humanoid")
-        local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
-        if rp and h and h.Health>0 then
-            local dist=GetDist(rp.Position)
-            local show=S.PlayerName or S.PlayerHP
-            local txt=""
-            if S.PlayerName then txt="[ "..p.Name.." ]" end
-            if S.PlayerHP then
-                txt=txt..(txt~="" and "\n" or "")
-                    .."HP "..math.floor(h.Health).."/"..math.floor(h.MaxHealth)
-            end
-            ManageESP(c,txt,S.PlayerColor,"CWPEP",show,dist,true)
-            local hl=c:FindFirstChild("CWPH")
-            if S.PlayerBox then
-                if not hl then hl=Instance.new("Highlight"); hl.Name="CWPH"; hl.Parent=c end
-                hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65
-                hl.OutlineColor=Color3.fromRGB(220,50,50); hl.OutlineTransparency=0
-            elseif hl then hl:Destroy() end
-        else
-            local b=c:FindFirstChild("CWPEP",true); if b then b:Destroy() end
-            local hl=c:FindFirstChild("CWPH"); if hl then hl:Destroy() end
+-- FullBright في loop منفصل — كل ثانية يكفي
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if S.FullBright then
+            Light.ClockTime=14; Light.Brightness=2
+            Light.GlobalShadows=false; Light.FogEnd=100000
         end
+    end
+end)
+
+-- ── PLAYER ESP LOOP (separate from RenderStepped) ─────────
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p==LocalPlayer then continue end
+            local c=p.Character; if not c then continue end
+            local h=c:FindFirstChildOfClass("Humanoid")
+            local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
+            if rp and h and h.Health>0 then
+                local dist=GetDist(rp.Position)
+                local show=S.PlayerName or S.PlayerHP
+                local txt=""
+                if S.PlayerName then txt="[ "..p.Name.." ]" end
+                if S.PlayerHP then
+                    txt=txt..(txt~="" and "\n" or "")
+                        .."HP "..math.floor(h.Health).."/"..math.floor(h.MaxHealth)
+                end
+                ManageESP(c,txt,S.PlayerColor,"CWPEP",show,dist,true)
+                local hl=c:FindFirstChild("CWPH")
+                if S.PlayerBox then
+                    if not hl then hl=Instance.new("Highlight"); hl.Name="CWPH"; hl.Parent=c end
+                    hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65
+                    hl.OutlineColor=Color3.fromRGB(220,50,50); hl.OutlineTransparency=0
+                elseif hl then hl:Destroy() end
+            else
+                local b=c:FindFirstChild("CWPEP",true); if b then b:Destroy() end
+                local hl=c:FindFirstChild("CWPH"); if hl then hl:Destroy() end
+            end
+        end
+    end
+end)
+
+
+-- God Mode loop — يرجع الـ HP لـ max كل 0.1 ثانية
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if not S.GodMode then continue end
+        local c=LocalPlayer.Character; if not c then continue end
+        local h=c:FindFirstChildOfClass("Humanoid"); if not h then continue end
+        if h.Health < h.MaxHealth then h.Health = h.MaxHealth end
     end
 end)
 
@@ -846,6 +870,7 @@ SU.NewToggle("Instant Interact", "Zero hold on prompts",           function(v) S
 SU.NewToggle("TP-Walk",          "Safe teleport movement hack",    function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1,  function(v) S.TPSpeed=v end)
 
+SM.NewToggle("God Mode",   "Max HP — cannot die",           function(v) S.GodMode=v end)
 SM.NewToggle("Noclip",     "Phase through walls", function(v)
     S.Noclip=v; SetNoclip(v)
 end)
