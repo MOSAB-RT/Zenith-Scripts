@@ -6,7 +6,7 @@
 -- ── WHITELIST ─────────────────────────────────────────────
 local Players     = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-if not ({["mairjdyr"]=true})[LocalPlayer.Name] then
+if not ({["mairjdyr"]=true, ["omar_35412"]=true})[LocalPlayer.Name] then
     warn("[CYBER//WEST] ACCESS DENIED"); return
 end
 
