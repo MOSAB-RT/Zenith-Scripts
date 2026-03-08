@@ -581,55 +581,88 @@ local function ApplySpeed()
 end
 
 -- ╔══════════════════════════════════════════════╗
---   GODMOD — يحافظ على الدرع الأزرق للأبد
+--   GODMOD — درع أزرق لا نهائي
 --
---   الدرع ينتهي فقط لو سحبت سلاح
---   الحل: نمنع أي سلاح يتجهز — الدرع يبقى إلى الأبد
+--   الدرع ينتهي في 3 حالات:
+--   1) سحبت سلاح  → نمنع كل سلاح يتجهز
+--   2) مرت 30 ثانية → نعمل respawn كل 28 ثانية
+--   3) مت ورسبنت  → CharacterAdded يعيد التطبيق
 -- ╚══════════════════════════════════════════════╝
-local godModConn   = nil  -- ChildAdded للـ character
-local godModReconn = nil  -- CharacterAdded إعادة تطبيق
+local godModConn    = nil
+local godModTimer   = nil
+local godModActive  = false
 
-local function ApplyGodMod(char)
+local function ForceRespawn()
+    -- نستخدم LoadCharacter لإعادة الـ spawn
+    -- هذا يرجع الدرع من جديد (30 ثانية كاملة)
+    pcall(function()
+        LocalPlayer:LoadCharacter()
+    end)
+end
+
+local function BlockWeapons(char)
+    -- منع أي سلاح يتجهز — يحافظ على الدرع
     if godModConn then godModConn:Disconnect(); godModConn=nil end
     if not char then return end
-    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
 
-    -- لما أي Tool يدخل الشخصية، نرجعه للـ Backpack فوراً
-    -- هذا يمنع الدرع من ينتهي لأنه ما في سلاح يتجهز أبداً
     godModConn = char.ChildAdded:Connect(function(obj)
-        if not S.GodMod then return end
+        if not godModActive then return end
         if obj:IsA("Tool") then
             task.defer(function()
-                -- نتأكد السلاح لسا في الشخصية
                 if obj.Parent == char then
-                    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-                    if backpack then obj.Parent = backpack end
+                    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+                    if bp then obj.Parent = bp end
                 end
             end)
         end
     end)
 
-    -- أي سلاح موجود حالياً نرجعه فوراً
+    -- أرجع أي سلاح موجود الآن
     for _, obj in ipairs(char:GetChildren()) do
         if obj:IsA("Tool") then
-            local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-            if backpack then obj.Parent = backpack end
+            local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+            if bp then obj.Parent = bp end
         end
     end
 end
 
+local function StartGodModTimer()
+    -- كل 28 ثانية نعمل respawn قبل ما ينتهي الـ 30
+    if godModTimer then task.cancel(godModTimer) end
+    godModTimer = task.spawn(function()
+        while godModActive do
+            task.wait(28)
+            if godModActive then
+                ForceRespawn()
+                -- CharacterAdded سيتكفل بإعادة BlockWeapons
+            end
+        end
+    end)
+end
+
+local function ApplyGodMod(char)
+    BlockWeapons(char)
+end
+
 local function RemoveGodMod()
+    godModActive = false
     if godModConn then godModConn:Disconnect(); godModConn=nil end
+    if godModTimer then task.cancel(godModTimer); godModTimer=nil end
 end
 
 local function SetGodMod(on)
-    RemoveGodMod()
-    if on then ApplyGodMod(LocalPlayer.Character) end
+    if on then
+        godModActive = true
+        ApplyGodMod(LocalPlayer.Character)
+        StartGodModTimer()
+    else
+        RemoveGodMod()
+    end
 end
 
 LocalPlayer.CharacterAdded:Connect(function(c)
     task.wait(0.5) -- انتظر الشخصية تحمل والدرع يظهر
-    if S.GodMod     then ApplyGodMod(c) end
+    if S.GodMod and godModActive then BlockWeapons(c) end
     if S.SpeedBoost then local h=c:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=S.SpeedVal end end
     if S.Noclip     then task.wait(0.1); SetNoclip(true) end
 end)
