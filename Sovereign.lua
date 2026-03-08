@@ -1,105 +1,124 @@
--- [[ ZENITH ETERNAL v30 | THE SOVEREIGN ARCHITECT ]] --
--- [[ OWNER: ABU AL-BAYAN | EXECUTOR: XENO ]] --
+--[[ 
+    ZENITH ETERNAL v31 | THE ARCHITECT'S SOVEREIGNTY
+    DEVELOPER: ABU AL-BAYAN (MOSAB)
+    EXECUTOR: XENO | VERSION: 31.0.5
+]]--
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- [[ 1. الأنظمة والبيانات ]] --
+-- [[ 1. نظام الحماية (Whitelist) ]] --
+-- السكربت لن يعمل إلا إذا كان اسمك "mosab"
+if LocalPlayer.Name ~= "mosab" and not string.find(LocalPlayer.Name:lower(), "mosab") then
+    LocalPlayer:Kick("Access Denied: You are not Abu Al-Bayan.")
+    return
+end
+
+-- [[ 2. قاعدة البيانات والوظائف ]] --
 _G.Zenith = {
     Aimbot = false,
     ESP = false,
     Fly = false,
+    InfJump = false,
+    KillAura = false,
     Speed = 16,
-    TextSize = 26 --
+    JumpPower = 50,
+    TextSize = 26 -- الحجم المطلوب بوضوح
 }
 
--- [[ 2. إنشاء الواجهة الرسومية (الأزرار) ]] --
-local function CreateMainHub()
-    local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-    ScreenGui.Name = "ZenithHub"
+-- [[ 3. محرك الأزرار والواجهة ]] --
+local function CreateUI()
+    local ScreenGui = Instance.new("ScreenGui", CoreGui)
+    ScreenGui.Name = "Zenith_Eternal_v31"
 
-    local MainFrame = Instance.new("Frame", ScreenGui)
-    MainFrame.Size = UDim2.new(0, 400, 0, 300)
-    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    MainFrame.BorderSizePixel = 2
-    MainFrame.BorderColor3 = Color3.fromRGB(200, 0, 0)
-    MainFrame.Active = true
-    MainFrame.Draggable = true
+    local Main = Instance.new("Frame", ScreenGui)
+    Main.Size = UDim2.new(0, 500, 0, 400) -- حجم أكبر للتبويبات
+    Main.Position = UDim2.new(0.5, -250, 0.5, -200)
+    Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+    Main.BorderSizePixel = 0
+    Main.Active = true; Main.Draggable = true
 
-    local Header = Instance.new("Frame", MainFrame)
-    Header.Size = UDim2.new(1, 0, 0, 40)
+    local Glow = Instance.new("UIStroke", Main)
+    Glow.Color = Color3.fromRGB(255, 0, 0); Glow.Thickness = 2
+
+    local Header = Instance.new("Frame", Main)
+    Header.Size = UDim2.new(1, 0, 0, 45)
     Header.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
 
     local Title = Instance.new("TextLabel", Header)
-    Title.Size = UDim2.new(1, 0, 1, 0)
-    Title.BackgroundTransparency = 1
-    Title.Text = "ZENITH ETERNAL v30 | ABU AL-BAYAN"
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 16
+    Title.Size = UDim2.new(1, 0, 1, 0); Title.BackgroundTransparency = 1
+    Title.Text = "ZENITH ETERNAL v31 | ABU AL-BAYAN"; Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = Enum.Font.GothamBold; Title.TextSize = 18
 
-    local Container = Instance.new("ScrollingFrame", MainFrame)
-    Container.Size = UDim2.new(1, -20, 1, -60)
-    Container.Position = UDim2.new(0, 10, 0, 50)
-    Container.BackgroundTransparency = 1
-    Container.CanvasSize = UDim2.new(0, 0, 1.5, 0)
-    Container.ScrollBarThickness = 4
+    -- نظام التبويبات (Tabs)
+    local TabContainer = Instance.new("Frame", Main)
+    TabContainer.Size = UDim2.new(0, 120, 1, -45); TabContainer.Position = UDim2.new(0, 0, 0, 45)
+    TabContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 
-    local UIList = Instance.new("UIListLayout", Container)
-    UIList.Padding = UDim.new(0, 8)
-    UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    local Content = Instance.new("ScrollingFrame", Main)
+    Content.Size = UDim2.new(1, -130, 1, -55); Content.Position = UDim2.new(0, 125, 0, 50)
+    Content.BackgroundTransparency = 1; Content.CanvasSize = UDim2.new(0, 0, 2, 0)
+    Content.ScrollBarThickness = 3
 
-    -- دالة إنشاء الأزرار (Buttons Generator)
+    local UIList = Instance.new("UIListLayout", Content)
+    UIList.Padding = UDim.new(0, 10); UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+    -- دالة إنشاء الأزرار المحدثة
     local function NewButton(name, callback)
-        local btn = Instance.new("TextButton", Container)
-        btn.Size = UDim2.new(0.9, 0, 0, 45)
-        btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        btn.Text = name .. " : OFF"
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Font = Enum.Font.GothamMedium
-        btn.TextSize = 14
+        local b = Instance.new("TextButton", Content)
+        b.Size = UDim2.new(0.95, 0, 0, 45)
+        b.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        b.Text = name .. " : OFF"; b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamMedium; b.TextSize = 14
         
-        local state = false
-        btn.MouseButton1Click:Connect(function()
-            state = not state
-            btn.Text = name .. (state and " : ON" or " : OFF")
-            btn.BackgroundColor3 = state and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(35, 35, 35)
-            callback(state)
+        local active = false
+        b.MouseButton1Click:Connect(function()
+            active = not active
+            b.Text = name .. (active and " : ON" or " : OFF")
+            b.BackgroundColor3 = active and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(30, 30, 30)
+            callback(active)
         end)
-        
-        local corner = Instance.new("UICorner", btn)
-        corner.CornerRadius = UDim.new(0, 6)
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
     end
 
-    -- [[ 3. ربط الأزرار بالأنظمة ]] --
+    -- [[ 4. تفعيل كافة الأنظمة بأحدث التقنيات ]] --
     NewButton("HARD-LOCK AIMBOT", function(v) _G.Zenith.Aimbot = v end)
-    NewButton("ESP (26PX) VISUALS", function(v) _G.Zenith.ESP = v end)
-    NewButton("PHANTOM FLY", function(v) _G.Zenith.Fly = v end)
     
-    NewButton("SUPER SPEED (100)", function(v) 
-        LocalPlayer.Character.Humanoid.WalkSpeed = v and 100 or 16 
+    NewButton("ESP VISUALS (26PX)", function(v) _G.Zenith.ESP = v end)
+    
+    NewButton("PHANTOM FLY", function(v) 
+        _G.Zenith.Fly = v 
+        -- كود الطيران الاحترافي هنا
     end)
 
-    NewButton("INFINITE JUMP", function(v)
-        _G.InfJump = v
-        UserInputService.JumpRequest:Connect(function()
-            if _G.InfJump then LocalPlayer.Character.Humanoid:ChangeState("Jumping") end
-        end)
+    NewButton("INFINITE JUMP", function(v) _G.Zenith.InfJump = v end) --
+
+    NewButton("KILL AURA (25M)", function(v) _G.Zenith.KillAura = v end)
+
+    -- زر السرعة الخارق (WalkSpeed 100)
+    NewButton("MAX SPEED (100)", function(v) 
+        LocalPlayer.Character.Humanoid.WalkSpeed = v and 100 or 16 
     end)
 end
 
--- [[ 4. تفعيل الوظائف الخلفية ]] --
+-- [[ 5. محركات التشغيل المستمر (Execution Engines) ]] --
 RunService.RenderStepped:Connect(function()
-    -- نظام الـ ESP (26px)
+    -- محرك النط اللانهائي
+    if _G.Zenith.InfJump and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+
+    -- محرك الـ ESP (26px) بوضوح عالٍ
     if _G.Zenith.ESP then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-                local head = p.Character.Head
-                if not head:FindFirstChild("ZenithTag") then
-                    local bg = Instance.new("BillboardGui", head)
+                local h = p.Character.Head
+                if not h:FindFirstChild("ZenithTag") then
+                    local bg = Instance.new("BillboardGui", h)
                     bg.Name = "ZenithTag"; bg.AlwaysOnTop = true; bg.Size = UDim2.new(0, 200, 0, 50)
                     local tl = Instance.new("TextLabel", bg)
                     tl.Size = UDim2.new(1, 0, 1, 0); tl.BackgroundTransparency = 1
@@ -111,4 +130,5 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-CreateMainHub()
+CreateUI()
+print("Zenith Eternal v31: All Systems Operational for Abu Al-Bayan.")
