@@ -627,8 +627,17 @@ local function BlockWeapons(char)
 end
 
 local function StartGodModTimer()
-    -- LoadCharacter يطرد من السيرفر — لا نستخدمه
-    -- نكتفي بـ BlockWeapons فقط
+    -- كل 28 ثانية نعمل respawn قبل ما ينتهي الـ 30
+    if godModTimer then task.cancel(godModTimer) end
+    godModTimer = task.spawn(function()
+        while godModActive do
+            task.wait(28)
+            if godModActive then
+                ForceRespawn()
+                -- CharacterAdded سيتكفل بإعادة BlockWeapons
+            end
+        end
+    end)
 end
 
 local function ApplyGodMod(char)
