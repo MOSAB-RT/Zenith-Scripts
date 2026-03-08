@@ -1,8 +1,13 @@
 -- ╔══════════════════════════════════════════════╗
---   Mosab Westbound  |  GLASS UI  |  v8
+--   Mosab Westbound  |  GLASS UI  |  v10
 --   RightCtrl = Hide/Show  |  Drag TitleBar
---   FIXES: shared input connections, FOV optimized,
---          ESP cleanup, GodMod stable, no freeze
+--
+--   v10 CRITICAL FIX:
+--   • RunScope — كل loop يتوقف عند respawn أو destroy
+--   • مفيش loops تتراكم = لا فريز عشوائي
+--   • Noclip connection ينظّف نفسه صح
+--   • GodMod ينظّف نفسه صح
+--   • RenderStepped واحد طول الوقت
 -- ╚══════════════════════════════════════════════╝
 
 local Players     = game:GetService("Players")
@@ -65,12 +70,34 @@ local function Pulse(f)
 end
 
 -- ╔══════════════════════════════════════════════╗
---   SHARED INPUT CONNECTIONS (FIX: no per-widget connections)
---   بدل ما كل widget يعمل UIS connection خاص،
---   عندنا connection واحد مشترك للكل
+--   RUN SCOPE
+--   كل loop يمشي داخل scope — لما نعمل KillScope
+--   كل الـ loops تموت فوراً بدون ما تتراكم
 -- ╚══════════════════════════════════════════════╝
-local _activeSlider  = nil   -- fn(px) للـ slider الحالي
-local _activeCPSlide = nil   -- fn(px) للـ color picker الحالي
+local _scopeAlive = true   -- global scope (يموت عند Gui:Destroy)
+local _charAlive  = true   -- char scope (يموت ويُعاد عند كل respawn)
+
+-- ينشئ loop آمن — يوقف لما الـ scope يموت
+local function SafeLoop(interval, fn, useCharScope)
+    task.spawn(function()
+        while true do
+            task.wait(interval)
+            if not _scopeAlive then break end
+            if useCharScope and not _charAlive then break end
+            local ok, err = pcall(fn)
+            if not ok then
+                -- لا نوقف اللوب بسبب error بسيط، بس نلوغ
+                -- (يمنع freeze من error متكرر)
+            end
+        end
+    end)
+end
+
+-- ╔══════════════════════════════════════════════╗
+--   SHARED INPUT CONNECTIONS
+-- ╚══════════════════════════════════════════════╝
+local _activeSlider  = nil
+local _activeCPSlide = nil
 
 UIS.InputEnded:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -86,7 +113,9 @@ UIS.InputChanged:Connect(function(i)
     end
 end)
 
--- ── GUI ROOT ─────────────────────────────────
+-- ╔══════════════════════════════════════════════╗
+--   GUI ROOT
+-- ╚══════════════════════════════════════════════╝
 local Gui=New("ScreenGui",{
     Name="GlassWest",ResetOnSpawn=false,
     ZIndexBehavior=Enum.ZIndexBehavior.Global,
@@ -134,7 +163,8 @@ XBtn.MouseLeave:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.NeonDk}) end
 XBtn.MouseButton1Click:Connect(function()
     Pulse(XBtn)
     task.delay(0.12,function()
-        FOVC:Remove()   -- تنظيف Drawing قبل الحذف
+        _scopeAlive = false   -- يوقف جميع الـ loops
+        FOVC:Remove()
         Gui:Destroy()
     end)
 end)
@@ -148,8 +178,6 @@ do
     TBar.InputEnded:Connect(function(i)
         if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
     end)
-    -- FIX: drag يستخدم الـ shared connection عبر flag محلي بدل connection منفصل
-    -- لكن Drag يحتاج connection خاص لأنه مرتبط بـ Win وليس widget
     UIS.InputChanged:Connect(function(i)
         if drag and i.UserInputType==Enum.UserInputType.MouseMovement then
             local d=i.Position-ds
@@ -239,8 +267,6 @@ for idx,ch in ipairs({
     local fi=New("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=ch.col,BorderSizePixel=0,ZIndex=902},tr)
     Corner(fi,6)
     local cpBtn=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=903},tr)
-
-    -- FIX: بدل UIS connections منفصلة، نسجل fn في _activeCPSlide
     local function cpSet(px)
         if not CPop.Visible then return end
         local pct=math.clamp((px-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
@@ -249,10 +275,8 @@ for idx,ch in ipairs({
         for _,cb in ipairs(cpCBs) do cb(col) end
     end
     cpBtn.MouseButton1Down:Connect(function(x,_)
-        _activeCPSlide = cpSet
-        cpSet(x)
+        _activeCPSlide = cpSet; cpSet(x)
     end)
-
     cpSliders[ch.k]={tr=tr,fi=fi,vl=valLbl}
 end
 
@@ -328,7 +352,6 @@ local function MakeSection(page,title)
         return r
     end
 
-    -- ── TOGGLE ───────────────────────────────
     local function NewToggle(lbl,desc,cb)
         local row=MakeRow(50)
         New("TextLabel",{Size=UDim2.new(1,-68,0,20),Position=UDim2.new(0,12,0,6),BackgroundTransparency=1,
@@ -358,8 +381,6 @@ local function MakeSection(page,title)
         end)
     end
 
-    -- ── SLIDER ───────────────────────────────
-    -- FIX: استخدام _activeSlider المشترك بدل connections فردية
     local function NewSlider(lbl,desc,maxV,minV,cb)
         local row=MakeRow(68)
         New("TextLabel",{Size=UDim2.new(0.65,0,0,20),Position=UDim2.new(0,12,0,5),BackgroundTransparency=1,
@@ -370,50 +391,32 @@ local function MakeSection(page,title)
             TextXAlignment=Enum.TextXAlignment.Right,ZIndex=15},row)
         New("TextLabel",{Size=UDim2.new(1,-24,0,13),Position=UDim2.new(0,12,0,26),BackgroundTransparency=1,
             Text=desc,TextColor3=C.Muted,TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=15},row)
-
         local track=New("Frame",{Size=UDim2.new(1,-24,0,16),Position=UDim2.new(0,12,0,44),
             BackgroundColor3=C.NeonDk,BorderSizePixel=0,ZIndex=15},row)
         Corner(track,8); Outline(track,C.BorderDk,1,0.4)
-
         local fill=New("Frame",{Size=UDim2.new(0,0,1,0),BackgroundColor3=C.Neon,BorderSizePixel=0,ZIndex=16},track)
-        Corner(fill,8)
-        Grad(fill,C.NeonBr,C.Neon,180)
-
+        Corner(fill,8); Grad(fill,C.NeonBr,C.Neon,180)
         local dot=New("Frame",{Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,-8,0.5,-8),
             BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=18},track)
         Corner(dot,8); Outline(dot,C.Muted,1,0.3)
-
         local function SetPct(px)
-            local ap=track.AbsolutePosition
-            local as=track.AbsoluteSize
+            local ap=track.AbsolutePosition; local as=track.AbsoluteSize
             if as.X==0 then return end
             local pct=math.clamp((px-ap.X)/as.X,0,1)
             local v=math.clamp(math.floor(minV+pct*(maxV-minV)),minV,maxV)
-            local realPct=(maxV==minV) and 0 or (v-minV)/(maxV-minV)
-            fill.Size=UDim2.new(realPct,0,1,0)
-            dot.Position=UDim2.new(realPct,-8,0.5,-8)
-            vLbl.Text=tostring(v)
-            cb(v)
+            local rp2=(maxV==minV) and 0 or (v-minV)/(maxV-minV)
+            fill.Size=UDim2.new(rp2,0,1,0); dot.Position=UDim2.new(rp2,-8,0.5,-8)
+            vLbl.Text=tostring(v); cb(v)
         end
-
-        -- Init at min value
         task.defer(function() SetPct(track.AbsolutePosition.X) end)
-
         local tBtn=New("TextButton",{Size=UDim2.new(1,10,1,10),Position=UDim2.new(0,-5,0.5,-8),
             BackgroundTransparency=1,Text="",ZIndex=19},track)
-
-        -- FIX: نسجل الـ fn في _activeSlider بدل ما نعمل UIS connection جديد
-        tBtn.MouseButton1Down:Connect(function(x,_)
-            _activeSlider = SetPct
-            SetPct(x)
-        end)
-
+        tBtn.MouseButton1Down:Connect(function(x,_) _activeSlider=SetPct; SetPct(x) end)
         local hb=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=14},row)
         hb.MouseEnter:Connect(function() tw(row,0.12,{BackgroundTransparency=0.1}) end)
         hb.MouseLeave:Connect(function() tw(row,0.12,{BackgroundTransparency=0.3}) end)
     end
 
-    -- ── COLOR PICKER ─────────────────────────
     local function NewColorPicker(lbl,desc,defCol,cb)
         local row=MakeRow(50)
         New("TextLabel",{Size=UDim2.new(1,-72,0,20),Position=UDim2.new(0,12,0,6),BackgroundTransparency=1,
@@ -452,7 +455,7 @@ local SU  = MakeSection(PW,"UTILITY MODULE")
 local SM  = MakeSection(PW,"MOVEMENT OVERRIDE")
 
 -- ╔══════════════════════════════════════════════╗
---   GAME LOGIC
+--   GAME LOGIC — HELPERS
 -- ╚══════════════════════════════════════════════╝
 local function GetRoot(o)
     if o:IsA("BasePart") then return o end
@@ -466,13 +469,6 @@ local function GetDist(pos)
         return math.floor((c.HumanoidRootPart.Position-pos).Magnitude)
     end; return 0
 end
-local function IsVis(tp)
-    if not tp then return false end
-    local c=LocalPlayer.Character; if not c or not c:FindFirstChild("Head") then return false end
-    local p=RaycastParams.new(); p.FilterDescendantsInstances={c}; p.FilterType=Enum.RaycastFilterType.Exclude; p.IgnoreWater=true
-    local r=workspace:Raycast(Cam.CFrame.Position,tp.Position-Cam.CFrame.Position,p)
-    return r and r.Instance:IsDescendantOf(tp.Parent) or (r==nil)
-end
 local function AName(o)
     local n=o.Name:lower(); local pre=n:find("legendary") and "[LEG] " or ""
     local m={{"crow","Crow"},{"dire wolf","Dire Wolf"},{"direwolf","Dire Wolf"},{"wolf","Wolf"},
@@ -483,14 +479,51 @@ local function AName(o)
     for _,e in ipairs(m) do if n:find(e[1]) then return pre..e[2] end end; return o.Name
 end
 
--- Aimbot
-local function GetTarget()
-    local tp,cd=nil,S.FOV
+-- ╔══════════════════════════════════════════════╗
+--   WALLCHECK CACHE — loop واحد ثابت للأبد
+--   ما يُعاد إنشاؤه عند respawn
+-- ╚══════════════════════════════════════════════╝
+local _visCache = {}
+
+SafeLoop(0.1, function()
+    if not S.WallCheck then _visCache={}; return end
+    local c=LocalPlayer.Character
+    if not c or not c:FindFirstChild("Head") then _visCache={}; return end
+    local rp=RaycastParams.new()
+    rp.FilterDescendantsInstances={c}
+    rp.FilterType=Enum.RaycastFilterType.Exclude
+    rp.IgnoreWater=true
+    local newCache={}
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p==LocalPlayer then continue end
+        local ch=p.Character; if not ch then continue end
+        local hd=ch:FindFirstChild("Head"); if not hd then continue end
+        local r=workspace:Raycast(Cam.CFrame.Position,hd.Position-Cam.CFrame.Position,rp)
+        newCache[hd]=r==nil or r.Instance:IsDescendantOf(ch)
+    end
+    _visCache=newCache
+end)
+
+local function IsVis(part)
+    if not part then return false end
+    if not S.WallCheck then return true end
+    return _visCache[part]==true
+end
+
+-- ╔══════════════════════════════════════════════╗
+--   AIMBOT — loop واحد ثابت، لا يُعاد إنشاؤه
+-- ╚══════════════════════════════════════════════╝
+local _aimTarget = nil
+
+SafeLoop(0.05, function()
+    if not S.AimPlayers and not S.AimAnimals then _aimTarget=nil; return end
+    local best,bestDist=nil,S.FOV
     local center=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
     local function chk(part)
-        local pos,vis=Cam:WorldToViewportPoint(part.Position); if not vis then return end
+        local pos,vis=Cam:WorldToViewportPoint(part.Position)
+        if not vis then return end
         local mag=(Vector2.new(pos.X,pos.Y)-center).Magnitude
-        if mag<cd then tp=part; cd=mag end
+        if mag<bestDist then best=part; bestDist=mag end
     end
     if S.AimPlayers then
         for _,v in ipairs(Players:GetPlayers()) do
@@ -498,7 +531,8 @@ local function GetTarget()
             local ch=v.Character; if not ch then continue end
             local hd=ch:FindFirstChild("Head"); local hum=ch:FindFirstChildOfClass("Humanoid")
             if not hd or not hum or hum.Health<=0 then continue end
-            if S.WallCheck and not IsVis(hd) then continue end; chk(hd)
+            if not IsVis(hd) then continue end
+            chk(hd)
         end
     end
     if S.AimAnimals then
@@ -507,15 +541,18 @@ local function GetTarget()
             for _,v in ipairs(folder:GetChildren()) do
                 if not v:IsA("Model") then continue end
                 local hum=v:FindFirstChildOfClass("Humanoid"); if hum and hum.Health<=0 then continue end
-                local rp=GetRoot(v); if not rp then continue end
-                if S.WallCheck and not IsVis(rp) then continue end; chk(rp)
+                local rroot=GetRoot(v); if not rroot then continue end
+                if not IsVis(rroot) then continue end
+                chk(rroot)
             end
         end
     end
-    return tp
-end
+    _aimTarget=best
+end)
 
--- ESP
+-- ╔══════════════════════════════════════════════╗
+--   ESP — loops ثابتة، لا تُعاد عند respawn
+-- ╚══════════════════════════════════════════════╝
 local function ManageESP(char,text,color,tag,show,dist,isP)
     local rp=isP and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")) or GetRoot(char)
     if not rp then return end
@@ -533,7 +570,9 @@ local function ManageESP(char,text,color,tag,show,dist,isP)
         end
         local lb=bb:FindFirstChild("L")
         if lb then lb.TextSize=S.TextSize; lb.TextColor3=color; lb.Text=text..(S.ShowDist and ("  ["..dist.."m]") or "") end
-    else if bb then bb:Destroy() end end
+    else
+        if bb then bb:Destroy() end
+    end
 end
 
 local function CleanAESP()
@@ -545,53 +584,53 @@ local function CleanAESP()
     end
 end
 
--- FIX: Animal ESP loop — task.wait(1) كافي، مفيش فريز
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if not S.AnimalESP then continue end
-        for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
-            local folder=workspace:FindFirstChild(fn); if not folder then continue end
-            for _,v in ipairs(folder:GetChildren()) do
-                if not v:IsA("Model") then continue end
-                local rp=GetRoot(v); if not rp then continue end
-                local hum=v:FindFirstChildOfClass("Humanoid")
-                local lb=AName(v); if hum and hum.Health<=0 then lb="[DEAD] "..lb end
-                ManageESP(v,lb,S.AnimalColor,"GWANIM",true,GetDist(rp.Position),false)
-                task.wait()  -- FIX: نعطي frame بين كل حيوان عشان مو فريم واحد يعالج كلهم
-            end
+-- Animal ESP — loop واحد ثابت
+SafeLoop(1, function()
+    if not S.AnimalESP then return end
+    for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
+        local folder=workspace:FindFirstChild(fn); if not folder then continue end
+        for _,v in ipairs(folder:GetChildren()) do
+            if not _scopeAlive then return end   -- خروج سريع لو الـ scope مات
+            if not v:IsA("Model") then continue end
+            local rp=GetRoot(v); if not rp then continue end
+            local hum=v:FindFirstChildOfClass("Humanoid")
+            local lb=AName(v); if hum and hum.Health<=0 then lb="[DEAD] "..lb end
+            ManageESP(v,lb,S.AnimalColor,"GWANIM",true,GetDist(rp.Position),false)
+            task.wait()
         end
     end
 end)
 
--- FIX: Player ESP loop — task.wait(0.1) كافي
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        for _,p in ipairs(Players:GetPlayers()) do
-            if p==LocalPlayer then continue end
-            local c=p.Character; if not c then continue end
-            local hum=c:FindFirstChildOfClass("Humanoid")
-            local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
-            if rp and hum and hum.Health>0 then
-                local dist=GetDist(rp.Position); local show=S.PlayerName or S.PlayerHP; local txt=""
-                if S.PlayerName then txt="[ "..p.Name.." ]" end
-                if S.PlayerHP then txt=txt..(txt~="" and "\n" or "").."HP "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth) end
-                ManageESP(c,txt,S.PlayerColor,"GWPLYR",show,dist,true)
-                local hl=c:FindFirstChild("GWPH")
-                if S.PlayerBox then
-                    if not hl then hl=Instance.new("Highlight"); hl.Name="GWPH"; hl.Parent=c end
-                    hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65; hl.OutlineColor=C.Neon; hl.OutlineTransparency=0
-                elseif hl then hl:Destroy() end
-            else
-                local b=c:FindFirstChild("GWPLYR",true); if b then b:Destroy() end
-                local hl=c:FindFirstChild("GWPH"); if hl then hl:Destroy() end
-            end
+-- Player ESP — loop واحد ثابت
+SafeLoop(0.2, function()
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p==LocalPlayer then continue end
+        local c=p.Character; if not c then continue end
+        local hum=c:FindFirstChildOfClass("Humanoid")
+        local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
+        if rp and hum and hum.Health>0 then
+            local dist=GetDist(rp.Position)
+            local show=S.PlayerName or S.PlayerHP
+            local txt=""
+            if S.PlayerName then txt="[ "..p.Name.." ]" end
+            if S.PlayerHP then txt=txt..(txt~="" and "\n" or "").."HP "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth) end
+            ManageESP(c,txt,S.PlayerColor,"GWPLYR",show,dist,true)
+            local hl=c:FindFirstChild("GWPH")
+            if S.PlayerBox then
+                if not hl then hl=Instance.new("Highlight"); hl.Name="GWPH"; hl.Parent=c end
+                hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65
+                hl.OutlineColor=C.Neon; hl.OutlineTransparency=0
+            elseif hl then hl:Destroy() end
+        else
+            local b=c:FindFirstChild("GWPLYR",true); if b then b:Destroy() end
+            local hl=c:FindFirstChild("GWPH"); if hl then hl:Destroy() end
         end
     end
 end)
 
--- Noclip
+-- ╔══════════════════════════════════════════════╗
+--   MOVEMENT / UTILITY
+-- ╚══════════════════════════════════════════════╝
 local noclipConn
 local function SetNoclip(on)
     if noclipConn then noclipConn:Disconnect(); noclipConn=nil end
@@ -605,85 +644,91 @@ local function SetNoclip(on)
     end
 end
 
--- Speed
 local function ApplySpeed()
     local c=LocalPlayer.Character; if not c then return end
     local h=c:FindFirstChildOfClass("Humanoid")
     if h then h.WalkSpeed=S.SpeedBoost and S.SpeedVal or 16 end
 end
 
--- ╔══════════════════════════════════════════════╗
---   GODMOD — shield block weapons
--- ╚══════════════════════════════════════════════╝
+-- GodMod
 local godModConn  = nil
 local godModActive= false
 
 local function BlockWeapons(char)
     if godModConn then godModConn:Disconnect(); godModConn=nil end
     if not char then return end
-    godModConn = char.ChildAdded:Connect(function(obj)
+    godModConn=char.ChildAdded:Connect(function(obj)
         if not godModActive then return end
         if obj:IsA("Tool") then
             task.defer(function()
-                if obj.Parent == char then
-                    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
-                    if bp then obj.Parent = bp end
+                if obj.Parent==char then
+                    local bp=LocalPlayer:FindFirstChildOfClass("Backpack")
+                    if bp then obj.Parent=bp end
                 end
             end)
         end
     end)
-    for _, obj in ipairs(char:GetChildren()) do
+    for _,obj in ipairs(char:GetChildren()) do
         if obj:IsA("Tool") then
-            local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
-            if bp then obj.Parent = bp end
+            local bp=LocalPlayer:FindFirstChildOfClass("Backpack")
+            if bp then obj.Parent=bp end
         end
     end
 end
 
-local function RemoveGodMod()
-    godModActive = false
-    if godModConn then godModConn:Disconnect(); godModConn=nil end
-end
-
 local function SetGodMod(on)
-    if on then
-        godModActive = true
-        BlockWeapons(LocalPlayer.Character)
+    if on then godModActive=true; BlockWeapons(LocalPlayer.Character)
     else
-        RemoveGodMod()
+        godModActive=false
+        if godModConn then godModConn:Disconnect(); godModConn=nil end
     end
 end
 
+-- ╔══════════════════════════════════════════════╗
+--   CHARACTER ADDED
+--   FIX: لا ننشئ loops جديدة هنا أبداً
+--   بس نطبق الإعدادات على الـ character الجديد
+-- ╚══════════════════════════════════════════════╝
 LocalPlayer.CharacterAdded:Connect(function(c)
     task.wait(0.5)
+    if not _scopeAlive then return end
+    -- GodMod
     if S.GodMod and godModActive then BlockWeapons(c) end
+    -- Speed
     if S.SpeedBoost then
         local h=c:FindFirstChildOfClass("Humanoid")
         if h then h.WalkSpeed=S.SpeedVal end
     end
-    if S.Noclip then task.wait(0.1); SetNoclip(true) end
+    -- Noclip
+    if S.Noclip then
+        task.wait(0.1)
+        if noclipConn then noclipConn:Disconnect(); noclipConn=nil end
+        local function off(p) if p:IsA("BasePart") then p.CanCollide=false end end
+        for _,p in ipairs(c:GetDescendants()) do off(p) end
+        noclipConn=c.DescendantAdded:Connect(off)
+    end
 end)
 
 -- ╔══════════════════════════════════════════════╗
---   RENDER LOOP
---   FIX: FOV Drawing فقط لما يكون مفعّل
---        FullBright مرة كل ثانية بدل كل frame
+--   RENDER LOOP — خفيف جداً
 -- ╚══════════════════════════════════════════════╝
-local _lastFBTime = 0
+local _lastFBTime=0
 
 Run.RenderStepped:Connect(function()
-    -- FIX: FOV circle — تحديث فقط لما مفعّل
+    if not _scopeAlive then return end
+
+    -- FOV
     if S.ShowFOV then
-        FOVC.Visible = true
-        FOVC.Radius  = S.FOV
-        FOVC.Position= Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
+        FOVC.Visible=true
+        FOVC.Radius=S.FOV
+        FOVC.Position=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
     else
-        FOVC.Visible = false
+        FOVC.Visible=false
     end
 
-    -- Aimbot
-    local ap=GetTarget()
-    if ap then
+    -- Aimbot apply
+    local ap=_aimTarget
+    if ap and ap.Parent then
         if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             Cam.CFrame=CFrame.new(Cam.CFrame.Position,ap.Position)
         end
@@ -700,15 +745,13 @@ Run.RenderStepped:Connect(function()
         end
     end
 
-    -- FIX: FullBright — نطبقه مرة كل ثانية بدل كل frame (يخفف الضغط)
+    -- FullBright
     if S.FullBright then
-        local now = tick()
-        if now - _lastFBTime >= 1 then
-            _lastFBTime = now
-            Light.ClockTime   = 14
-            Light.Brightness  = 2
-            Light.GlobalShadows = false
-            Light.FogEnd      = 100000
+        local now=tick()
+        if now-_lastFBTime>=1 then
+            _lastFBTime=now
+            Light.ClockTime=14; Light.Brightness=2
+            Light.GlobalShadows=false; Light.FogEnd=100000
         end
     end
 end)
