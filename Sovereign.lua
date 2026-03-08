@@ -1061,53 +1061,62 @@ local function ApplyGodMode(char)
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
 
-    pcall(function()
-        hum.MaxHealth = 1e+308
-        hum.Health    = 1e+308
-    end)
-    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead,        false) end)
-    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false) end)
+    -- طريقة تشتغل مع Xeno: نراقب الـ Health مباشرة ونرجعه
+    -- بدون SetStateEnabled لأن Xeno ما يدعمها
 
-    local c1 = char.ChildAdded:Connect(function(obj)
-        if S.GodMode and obj.Name == "BreakJointsOnDeath" then
-            pcall(function() obj:Destroy() end)
+    -- نخزن الـ MaxHealth الأصلي ونضبطها على 100 عادي
+    -- لكن كل ما انخفض نرجعه فوري بـ Heartbeat
+
+    local c1 = Run.Heartbeat:Connect(function()
+        if not S.GodMode then return end
+        if not hum or not hum.Parent then return end
+        -- لو الـ Health وقع تحت 10% نرجعه للـ max
+        if hum.Health < hum.MaxHealth * 0.1 then
+            hum.Health = hum.MaxHealth
         end
     end)
 
-    local c2 = Run.Heartbeat:Connect(function()
+    -- منع BreakJoints
+    local c2 = char.ChildAdded:Connect(function(obj)
         if not S.GodMode then return end
-        pcall(function()
-            hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-            if hum.Health < 1e+300 then
-                hum.MaxHealth = 1e+308
-                hum.Health    = 1e+308
+        if obj.Name == "BreakJointsOnDeath" or obj.Name == "BreakJoints" then
+            task.defer(function() pcall(function() obj:Destroy() end) end)
+        end
+    end)
+
+    -- لو مات نرجع الـ health فوري
+    local c3 = hum.Died:Connect(function()
+        if not S.GodMode then return end
+        task.defer(function()
+            if hum and hum.Parent then
+                hum.Health = hum.MaxHealth
             end
         end)
     end)
 
-    local c3 = hum.Died:Connect(function()
-        if not S.GodMode then return end
-        pcall(function()
-            hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-            hum.MaxHealth = 1e+308
-            hum.Health    = 1e+308
-        end)
+    -- أسرع loop ممكن — كل 0.05 ثانية نتأكد
+    local c4 = task.spawn(function()
+        while S.GodMode do
+            task.wait(0.05)
+            if hum and hum.Parent and hum.Health < hum.MaxHealth then
+                hum.Health = hum.MaxHealth
+            end
+        end
     end)
 
     table.insert(godConns, c1)
     table.insert(godConns, c2)
     table.insert(godConns, c3)
+    -- c4 is a thread, stops when S.GodMode = false
 end
 
 local function RemoveGodMode()
-    for _, c in ipairs(godConns) do pcall(function() c:Disconnect() end) end
+    for _, c in ipairs(godConns) do
+        pcall(function()
+            if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
+        end)
+    end
     table.clear(godConns)
-    local char = LocalPlayer.Character; if not char then return end
-    local hum  = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead,        true) end)
-    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true) end)
-    hum.MaxHealth = 100
-    hum.Health    = math.min(hum.Health, 100)
 end
 
 local function SetGodMode(on)
@@ -1121,19 +1130,39 @@ local spawnProtConn
 local function EnableSpawnProt(char)
     if spawnProtConn then spawnProtConn:Disconnect(); spawnProtConn = nil end
     if not char then return end
-    local protected = true
-    task.delay(30, function() protected = false end)
 
-    local function tryUnequip()
-        if not protected then return end
-        local c2  = LocalPlayer.Character; if not c2 then return end
-        local bp  = LocalPlayer:FindFirstChildOfClass("Backpack")
-        local tool= c2:FindFirstChildOfClass("Tool")
-        if tool and bp then tool.Parent = bp end
-    end
+    -- الـ Spawn Protection في Westbound تروح لو:
+    -- 1) سحبت سلاح  2) خرجت من المنطقة  3) انتهت 30 ثانية
+    -- نحن نمنع رقم 1 فقط (الوحيد اللي نقدر نتحكم فيه client-side)
 
+    local active = true
+    task.delay(32, function() active = false end) -- 32 ثانية احتياط
+
+    -- لما يضيف Tool للـ character نرجعه للـ backpack فوري
     spawnProtConn = char.ChildAdded:Connect(function(obj)
-        if obj:IsA("Tool") and protected then task.defer(tryUnequip) end
+        if not active then return end
+        if obj:IsA("Tool") then
+            task.defer(function()
+                if not active then return end
+                local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+                if bp and obj and obj.Parent == char then
+                    obj.Parent = bp
+                end
+            end)
+        end
+    end)
+
+    -- أيضاً كل 0.5 ثانية نتأكد ما في tool مجهز
+    task.spawn(function()
+        while active do
+            task.wait(0.5)
+            local c2 = LocalPlayer.Character; if not c2 then break end
+            local tool = c2:FindFirstChildOfClass("Tool")
+            local bp   = LocalPlayer:FindFirstChildOfClass("Backpack")
+            if tool and bp then
+                tool.Parent = bp
+            end
+        end
     end)
 end
 
