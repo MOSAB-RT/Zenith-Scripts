@@ -30,6 +30,7 @@ local S = {
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
     GodMode=false,
+    SpawnProt=false,
 }
 
 -- ── FOV CIRCLE ────────────────────────────────────────────
@@ -743,16 +744,7 @@ local function SetNoclip(on)
     end
 end
 
-LocalPlayer.CharacterAdded:Connect(function(c)
-    c:WaitForChild("Humanoid",5)
-    if S.Noclip then
-        task.wait(0.1); SetNoclip(true)
-    end
-    if S.SpeedBoost then
-        local h=c:FindFirstChildOfClass("Humanoid")
-        if h then h.WalkSpeed=S.SpeedVal end
-    end
-end)
+-- CharacterAdded handled below in God Mode section
 
 -- ── SPEED ─────────────────────────────────────────────────
 local function ApplySpeed()
@@ -840,53 +832,141 @@ local function ApplyGodMode(char)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
-    -- رفع الـ MaxHealth والـ Health لرقم ضخم
-    hum.MaxHealth = math.huge
-    hum.Health    = math.huge
+    -- منع state الموت نهائياً
+    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
+    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false) end)
 
-    -- منع الـ Died من يشتغل
-    local c1 = hum.HealthChanged:Connect(function()
-        if S.GodMode and hum.Health < 9e+99 then
-            hum.MaxHealth = math.huge
-            hum.Health    = math.huge
+    -- لو HP وصل 0 نرجعه فوري
+    local c1 = hum.HealthChanged:Connect(function(hp)
+        if S.GodMode and hp <= 0 then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                hum.Health = hum.MaxHealth
+            end)
         end
     end)
 
-    -- منع BreakJoints (الموت الفوري)
-    local c2 = char.ChildAdded:Connect(function(obj)
-        if S.GodMode and obj.Name == "BreakJointsOnDeath" then
-            obj:Destroy()
-        end
+    -- منع Died event
+    local c2 = hum.Died:Connect(function()
+        if not S.GodMode then return end
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+            hum.Health = hum.MaxHealth
+        end)
+    end)
+
+    -- Heartbeat — يتأكد كل frame إنك ما تموت
+    local c3 = Run.Heartbeat:Connect(function()
+        if not S.GodMode then return end
+        pcall(function()
+            if hum.Health <= 0 then hum.Health = hum.MaxHealth end
+            hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        end)
     end)
 
     table.insert(godConns, c1)
     table.insert(godConns, c2)
+    table.insert(godConns, c3)
 end
 
 local function RemoveGodMode()
-    for _, c in ipairs(godConns) do c:Disconnect() end
+    for _, c in ipairs(godConns) do pcall(function() c:Disconnect() end) end
     table.clear(godConns)
     local char = LocalPlayer.Character; if not char then return end
     local hum  = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-    hum.MaxHealth = 100
-    hum.Health    = 100
+    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
+    pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true) end)
 end
 
 local function SetGodMode(on)
-    if on then
-        ApplyGodMode(LocalPlayer.Character)
-    else
-        RemoveGodMode()
-    end
+    RemoveGodMode()
+    if on then ApplyGodMode(LocalPlayer.Character) end
 end
 
--- اذا respawn وGod Mode شغال، نعيد تطبيقه
 LocalPlayer.CharacterAdded:Connect(function(c)
-    if S.GodMode then
-        task.wait(0.2)
-        ApplyGodMode(c)
+    table.clear(godConns)
+    task.wait(0.3)
+    if S.GodMode then ApplyGodMode(c) end
+    if S.SpeedBoost then
+        local h=c:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed=S.SpeedVal end
     end
+    if S.Noclip then task.wait(0.1); SetNoclip(true) end
 end)
+
+-- ── WANTED PROTECTION ─────────────────────────────────────
+-- يمنع الـ wanted level يرتفع عن طريق hook على FireServer
+local wantedHook
+local oldFireServer = Instance.new("RemoteEvent").FireServer -- reference
+
+local function SetWantedProtect(on)
+    if on then
+        -- Hook على كل RemoteEvent FireServer
+        local mt = getrawmetatable and getrawmetatable(game)
+        if mt then
+            local oldIndex = mt.__index
+            local oldNI    = mt.__newindex
+            -- نستخدم hookfunction لو متوفر
+            if hookfunction then
+                -- Synapse / KRNL method
+                local oldFS = game.FindFirstChild -- placeholder
+                -- الطريقة الأكثر توافقاً:
+                wantedHook = Run.Heartbeat:Connect(function()
+                    if not S.WantedProtect then return end
+                    -- نبحث عن الـ Wanted value وصفره
+                    local plrData = workspace:FindFirstChild("PlayerData") or
+                                    workspace:FindFirstChild("Players")
+                    -- Westbound يخزن الـ wanted في LocalPlayer
+                    local wantedVal = LocalPlayer:FindFirstChild("Wanted",true)
+                        or LocalPlayer:FindFirstChild("WantedLevel",true)
+                        or LocalPlayer:FindFirstChild("WantedStars",true)
+                    if wantedVal and wantedVal:IsA("NumberValue") or
+                       wantedVal and wantedVal:IsA("IntValue") then
+                        if wantedVal.Value > 0 then wantedVal.Value = 0 end
+                    end
+                end)
+            else
+                -- fallback — نراقب الـ value مباشرة
+                wantedHook = Run.Heartbeat:Connect(function()
+                    if not S.WantedProtect then return end
+                    local function clearWanted(parent)
+                        if not parent then return end
+                        for _, v in ipairs(parent:GetDescendants()) do
+                            if (v.Name:lower():find("wanted") or v.Name:lower():find("bounty"))
+                               and (v:IsA("NumberValue") or v:IsA("IntValue")) then
+                                if v.Value > 0 then
+                                    pcall(function() v.Value = 0 end)
+                                end
+                            end
+                        end
+                    end
+                    clearWanted(LocalPlayer)
+                    clearWanted(LocalPlayer.Character)
+                end)
+            end
+        else
+            -- بدون metatable access — نراقب الـ values مباشرة
+            wantedHook = Run.Heartbeat:Connect(function()
+                if not S.WantedProtect then return end
+                local function clearWanted(parent)
+                    if not parent then return end
+                    for _, v in ipairs(parent:GetDescendants()) do
+                        if (v.Name:lower():find("wanted") or v.Name:lower():find("bounty"))
+                           and (v:IsA("NumberValue") or v:IsA("IntValue")) then
+                            if v.Value > 0 then
+                                pcall(function() v.Value = 0 end)
+                            end
+                        end
+                    end
+                end
+                clearWanted(LocalPlayer)
+                if LocalPlayer.Character then clearWanted(LocalPlayer.Character) end
+            end)
+        end
+    else
+        if wantedHook then wantedHook:Disconnect(); wantedHook=nil end
+    end
+end
 
 -- ── POPULATE UI ───────────────────────────────────────────
 SA.NewToggle("Target Players",   "RMB — Lock onto players",               function(v) S.AimPlayers=v end)
@@ -910,12 +990,18 @@ SVC.NewColorPicker("Player ESP Color","Color for player labels",S.PlayerColor, f
 SVC.NewColorPicker("Animal ESP Color","Color for animal labels",S.AnimalColor, function(v) S.AnimalColor=v end)
 SVC.NewColorPicker("FOV Ring Color",  "Color of the aim circle",FOVC.Color,    function(v) FOVC.Color=v end)
 
+SU.NewToggle("Wanted Protect", "Prevents wanted level rising",  function(v) S.WantedProtect=v; SetWantedProtect(v) end)
 SU.NewToggle("Full Bright",      "Force max light, remove fog",    function(v) S.FullBright=v end)
 SU.NewToggle("Instant Interact", "Zero hold on prompts",           function(v) S.Interact=v end)
 SU.NewToggle("TP-Walk",          "Safe teleport movement hack",    function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1,  function(v) S.TPSpeed=v end)
 
 SM.NewToggle("God Mode",   "Infinite HP — cannot die",      function(v) S.GodMode=v; SetGodMode(v) end)
+SM.NewToggle("Spawn Protect","يحافظ على الدائرة الزرقا 30 ثانية", function(v)
+    S.SpawnProt=v
+    if v then EnableSpawnProt(LocalPlayer.Character)
+    elseif spawnProtConn then spawnProtConn:Disconnect(); spawnProtConn=nil end
+end)
 SM.NewToggle("Noclip",     "Phase through walls", function(v)
     S.Noclip=v; SetNoclip(v)
 end)
