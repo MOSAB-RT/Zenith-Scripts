@@ -1018,18 +1018,7 @@ task.spawn(function()
     end
 end)
 
--- FullBright loop
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if S.FullBright then
-            Light.ClockTime    = 14
-            Light.Brightness   = 2
-            Light.GlobalShadows= false
-            Light.FogEnd       = 100000
-        end
-    end
-end)
+-- FullBright handled in RenderStepped
 
 -- ── NOCLIP ────────────────────────────────────────────────
 local noclipConn
@@ -1059,62 +1048,39 @@ local godConns = {}
 
 local function ApplyGodMode(char)
     if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
 
-    -- طريقة تشتغل مع Xeno: نراقب الـ Health مباشرة ونرجعه
-    -- بدون SetStateEnabled لأن Xeno ما يدعمها
+    -- الطريقة الوحيدة الموثوقة مع Xeno:
+    -- نراقب Health كل Heartbeat ونرجعه للـ MaxHealth فوري
 
-    -- نخزن الـ MaxHealth الأصلي ونضبطها على 100 عادي
-    -- لكن كل ما انخفض نرجعه فوري بـ Heartbeat
+    local savedMax = hum.MaxHealth  -- نخزن الـ MaxHealth الأصلي
 
     local c1 = Run.Heartbeat:Connect(function()
         if not S.GodMode then return end
-        if not hum or not hum.Parent then return end
-        -- لو الـ Health وقع تحت 10% نرجعه للـ max
-        if hum.Health < hum.MaxHealth * 0.1 then
-            hum.Health = hum.MaxHealth
+        if not hum.Parent then return end
+        if hum.Health < savedMax then
+            hum.Health = savedMax
         end
     end)
 
-    -- منع BreakJoints
+    -- منع BreakJoints مباشرة
     local c2 = char.ChildAdded:Connect(function(obj)
         if not S.GodMode then return end
         if obj.Name == "BreakJointsOnDeath" or obj.Name == "BreakJoints" then
-            task.defer(function() pcall(function() obj:Destroy() end) end)
-        end
-    end)
-
-    -- لو مات نرجع الـ health فوري
-    local c3 = hum.Died:Connect(function()
-        if not S.GodMode then return end
-        task.defer(function()
-            if hum and hum.Parent then
-                hum.Health = hum.MaxHealth
-            end
-        end)
-    end)
-
-    -- أسرع loop ممكن — كل 0.05 ثانية نتأكد
-    local c4 = task.spawn(function()
-        while S.GodMode do
-            task.wait(0.05)
-            if hum and hum.Parent and hum.Health < hum.MaxHealth then
-                hum.Health = hum.MaxHealth
-            end
+            task.defer(function()
+                pcall(function() obj:Destroy() end)
+            end)
         end
     end)
 
     table.insert(godConns, c1)
     table.insert(godConns, c2)
-    table.insert(godConns, c3)
-    -- c4 is a thread, stops when S.GodMode = false
 end
 
 local function RemoveGodMode()
-    for _, c in ipairs(godConns) do
-        pcall(function()
-            if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
-        end)
+    for _, conn in ipairs(godConns) do
+        pcall(function() conn:Disconnect() end)
     end
     table.clear(godConns)
 end
@@ -1179,8 +1145,6 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     if S.Noclip then task.wait(0.1); SetNoclip(true) end
 end)
 
--- ── WANTED PROTECT ────────────────────────────────────────
-
 -- ── RENDER LOOP (lightweight) ─────────────────────────────
 Run.RenderStepped:Connect(function()
     FOVC.Visible  = S.ShowFOV
@@ -1205,6 +1169,13 @@ Run.RenderStepped:Connect(function()
                 c:TranslateBy(h.MoveDirection * S.TPSpeed * 0.1)
             end
         end
+    end
+
+    if S.FullBright then
+        Light.ClockTime     = 14
+        Light.Brightness    = 2
+        Light.GlobalShadows = false
+        Light.FogEnd        = 100000
     end
 end)
 
