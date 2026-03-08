@@ -709,60 +709,71 @@ local function NewSection(page, title)
             TextXAlignment=Enum.TextXAlignment.Left,
         }, row)
 
-        -- track
+        -- track container (no ClipsDescendants so dot shows)
         local track = New("Frame", {
-            Size=UDim2.new(1,-28,0,20), Position=UDim2.new(0,14,0,48),
+            Size=UDim2.new(1,-28,0,16), Position=UDim2.new(0,14,0,50),
             BackgroundColor3=C.NeonDark, BorderSizePixel=0,
+            ClipsDescendants=false,
         }, row)
-        RC(track, 10)
+        RC(track, 8)
         Stroke(track, C.BorderSub, 1, 0.3)
 
+        -- fill bar inside track
         local fill = New("Frame", {
-            Size=UDim2.new(0,0,1,0), BackgroundColor3=C.Neon, BorderSizePixel=0,
+            Size=UDim2.new(0,0,1,0),
+            BackgroundColor3=C.Neon, BorderSizePixel=0,
+            ClipsDescendants=false,
         }, track)
-        RC(fill, 10)
+        RC(fill, 8)
         Gradient(fill, C.NeonGlow, C.Neon, 180)
 
+        -- dot on top of fill, centered vertically on the track
         local dot = New("Frame", {
-            Size=UDim2.new(0,20,0,20), Position=UDim2.new(1,-20,0.5,-10),
+            Size=UDim2.new(0,18,0,18),
+            Position=UDim2.new(1,-9,0.5,-9),
             BackgroundColor3=C.White, BorderSizePixel=0,
+            ZIndex=5,
         }, fill)
-        RC(dot, 10)
+        RC(dot, 9)
         Stroke(dot, C.Muted, 1, 0.3)
 
         local function SetVal(v)
             v = math.clamp(math.floor(v), minV, maxV)
-            local pct = maxV == minV and 0 or (v-minV)/(maxV-minV)
-            fill.Size   = UDim2.new(pct, 0, 1, 0)
-            vLbl.Text   = tostring(v)
+            local pct = maxV == minV and 0 or (v - minV) / (maxV - minV)
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            vLbl.Text = tostring(v)
             cb(v)
         end
         SetVal(minV)
 
-        -- hover effect on row
+        -- invisible hitbox covering full row for easier sliding
+        local sliding = false
         local hitbox2 = New("TextButton", {
-            Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="", Parent=row,
+            Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="",
+            ZIndex=6, Parent=row,
         })
         hitbox2.MouseEnter:Connect(function() T(row, 0.15, {BackgroundTransparency=0.15}) end)
         hitbox2.MouseLeave:Connect(function() T(row, 0.15, {BackgroundTransparency=0.35}) end)
 
-        local sliding = false
+        -- clicking anywhere on track starts slide
         track.InputBegan:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1 then
                 sliding = true
-                SetVal(minV + math.clamp(
-                    (i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1
-                ) * (maxV-minV))
+                local pct = math.clamp(
+                    (i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                SetVal(minV + pct * (maxV - minV))
             end
         end)
         UIS.InputEnded:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                sliding = false
+            end
         end)
         UIS.InputChanged:Connect(function(i)
             if sliding and i.UserInputType == Enum.UserInputType.MouseMovement then
-                SetVal(minV + math.clamp(
-                    (i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1
-                ) * (maxV-minV))
+                local pct = math.clamp(
+                    (i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                SetVal(minV + pct * (maxV - minV))
             end
         end)
     end
@@ -1046,16 +1057,105 @@ end
 -- ── GOD MODE ──────────────────────────────────────────────
 local godConns = {}
 
+-- ── GOD MODE — SERVER SIDE HOOK ──────────────────────────
+-- نعترض كل RemoteEvent/RemoteFunction يرسل damage
+-- ونوقف أي call فيه كلمة damage/hit/hurt/take
+
+local _origFireServer
+local _origInvokeServer
+local godHooked = false
+
+local function HookRemotes()
+    if godHooked then return end
+    godHooked = true
+
+    -- الـ keywords اللي تدل على damage remote
+    local dmgKeys = {
+        "damage","dmg","hit","hurt","takehit","takedmg",
+        "takedamage","dealdam","dealdmg","applydmg",
+        "applydamage","onhit","struck","wound","injure",
+    }
+
+    local function isDamageRemote(name)
+        if not name then return false end
+        local low = name:lower()
+        for _, k in ipairs(dmgKeys) do
+            if low:find(k) then return true end
+        end
+        return false
+    end
+
+    -- Hook FireServer
+    local mt = getrawmetatable(game)
+    if mt then
+        local oldNI = mt.__newindex
+        local oldNam = mt.__namecall
+
+        -- Xeno supports sethiddenproperty / hookmetamethod
+        if hookmetamethod then
+            local origNam = hookmetamethod(game, "__namecall", function(self, ...)
+                if not S.GodMode then return origNam(self, ...) end
+                local method = getnamecallmethod()
+                if method == "FireServer" or method == "InvokeServer" then
+                    if self:IsA("RemoteEvent") or self:IsA("RemoteFunction") then
+                        if isDamageRemote(self.Name) then
+                            return -- block it
+                        end
+                    end
+                end
+                return origNam(self, ...)
+            end)
+        end
+    end
+end
+
 local function ApplyGodMode(char)
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
-    -- الطريقة الوحيدة الموثوقة مع Xeno:
-    -- نراقب Health كل Heartbeat ونرجعه للـ MaxHealth فوري
+    local savedMax = hum.MaxHealth
 
-    local savedMax = hum.MaxHealth  -- نخزن الـ MaxHealth الأصلي
+    -- طبقة 1: hook الـ remotes عبر hookmetamethod
+    pcall(HookRemotes)
 
+    -- طبقة 1b: نبحث عن damage remotes بالاسم ونربط عليها مباشرة
+    -- هذا fallback لو hookmetamethod ما يدعمه Xeno
+    local dmgKeys2 = {"damage","dmg","hit","hurt","takehit","takedmg","takedamage"}
+    local function scanRemotes(parent)
+        if not parent then return end
+        for _, obj in ipairs(parent:GetDescendants()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local low = obj.Name:lower()
+                for _, k in ipairs(dmgKeys2) do
+                    if low:find(k) then
+                        -- وجدنا remote مشبوه، نربط OnClientEvent
+                        -- لو السيرفر يرسل damage event للـ client
+                        pcall(function()
+                            if obj:IsA("RemoteEvent") then
+                                obj.OnClientEvent:Connect(function()
+                                    -- لما السيرفر يرسل damage نرجع HP فوري
+                                    if S.GodMode and hum and hum.Parent then
+                                        task.defer(function()
+                                            if hum.Parent then
+                                                hum.Health = savedMax
+                                            end
+                                        end)
+                                    end
+                                end)
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+    task.delay(2, function() -- انتظر اللعبة تحمل
+        scanRemotes(workspace)
+        scanRemotes(game:GetService("ReplicatedStorage"))
+    end)
+
+    -- طبقة 2: Heartbeat يرجع HP فوري كل frame
     local c1 = Run.Heartbeat:Connect(function()
         if not S.GodMode then return end
         if not hum.Parent then return end
@@ -1064,13 +1164,11 @@ local function ApplyGodMode(char)
         end
     end)
 
-    -- منع BreakJoints مباشرة
+    -- طبقة 3: منع BreakJoints
     local c2 = char.ChildAdded:Connect(function(obj)
         if not S.GodMode then return end
         if obj.Name == "BreakJointsOnDeath" or obj.Name == "BreakJoints" then
-            task.defer(function()
-                pcall(function() obj:Destroy() end)
-            end)
+            task.defer(function() pcall(function() obj:Destroy() end) end)
         end
     end)
 
@@ -1079,6 +1177,7 @@ local function ApplyGodMode(char)
 end
 
 local function RemoveGodMode()
+    godHooked = false
     for _, conn in ipairs(godConns) do
         pcall(function() conn:Disconnect() end)
     end
