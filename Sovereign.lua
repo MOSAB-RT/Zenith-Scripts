@@ -832,35 +832,42 @@ local function ApplyGodMode(char)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
+    -- رفع MaxHealth لرقم ضخم — أي damage من السيرفر ما يخلص الـ HP
+    pcall(function()
+        hum.MaxHealth = 1e+308
+        hum.Health    = 1e+308
+    end)
+
     -- منع state الموت نهائياً
     pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
     pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false) end)
 
-    -- لو HP وصل 0 نرجعه فوري
-    local c1 = hum.HealthChanged:Connect(function(hp)
-        if S.GodMode and hp <= 0 then
-            pcall(function()
-                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-                hum.Health = hum.MaxHealth
-            end)
+    -- منع BreakJoints — يفكك الجسم عند الموت
+    local c1 = char.ChildAdded:Connect(function(obj)
+        if S.GodMode and obj.Name == "BreakJointsOnDeath" then
+            pcall(function() obj:Destroy() end)
         end
     end)
 
-    -- منع Died event
-    local c2 = hum.Died:Connect(function()
+    -- Heartbeat — كل frame نتأكد HP فوق النص
+    local c2 = Run.Heartbeat:Connect(function()
         if not S.GodMode then return end
         pcall(function()
             hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-            hum.Health = hum.MaxHealth
+            if hum.Health < 1e+300 then
+                hum.MaxHealth = 1e+308
+                hum.Health    = 1e+308
+            end
         end)
     end)
 
-    -- Heartbeat — يتأكد كل frame إنك ما تموت
-    local c3 = Run.Heartbeat:Connect(function()
+    -- لو وصل Died رغم كل شيء
+    local c3 = hum.Died:Connect(function()
         if not S.GodMode then return end
         pcall(function()
-            if hum.Health <= 0 then hum.Health = hum.MaxHealth end
             hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+            hum.MaxHealth = 1e+308
+            hum.Health    = 1e+308
         end)
     end)
 
