@@ -1,39 +1,79 @@
--- ============================================================
---  🌵 Yusuf Westbound OP Script | IMPROVED VERSION
---  Fixes: Performance, Memory Leaks, Silent Aim, TP-Walk
---  Additions: Noclip, Speed Boost, Animal Kill ESP, Auto-Aim Toggle
--- ============================================================
+-- ██████████████████████████████████████████████████████████████
+-- ██                                                          ██
+-- ██   ░░░░  CYBER//WEST  ░░░░   AUTHORIZED ACCESS ONLY      ██
+-- ██   [ OPERATOR: mairjdyr ] [ CLEARANCE: LEVEL-MAX ]       ██
+-- ██                                                          ██
+-- ██████████████████████████████████████████████████████████████
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
-local Window = Library.CreateLib("🌵 Mosab Westbound OP Script | TR", "GrapeTheme")
+-- ============================================================
+--  WHITELIST SYSTEM — ONLY mairjdyr CAN EXECUTE
+-- ============================================================
+local Players    = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local WHITELIST = {
+    ["mairjdyr"] = true,
+}
+
+if not WHITELIST[LocalPlayer.Name] then
+    -- Silent terminate — no error shown to others
+    warn("[CYBER//WEST] >> ACCESS DENIED: " .. LocalPlayer.Name .. " is not an authorized operator.")
+    return
+end
+
+-- ============================================================
+-- BOOT SEQUENCE UI (Cyber flavor)
+-- ============================================================
+local StarterGui = game:GetService("StarterGui")
+local function CyberNotify(title, body, dur)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title    = title,
+            Text     = body,
+            Duration = dur or 4,
+        })
+    end)
+end
+
+CyberNotify("◈ CYBER//WEST", "[ IDENTITY VERIFIED ] Welcome, " .. LocalPlayer.Name, 5)
+task.wait(0.5)
+CyberNotify("◈ SYS INIT", "[ LOADING MODULES... ] Stand by.", 3)
+task.wait(0.8)
+
+-- ============================================================
+-- LOAD UI LIBRARY
+-- ============================================================
+local Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"
+))()
+
+local Window = Library.CreateLib(
+    "◈ CYBER//WEST  ·  OPERATOR: " .. LocalPlayer.Name .. "  ·  STATUS: ONLINE",
+    "GrapeTheme"
+)
 
 -- ============================================================
 -- SERVICES
 -- ============================================================
-local Players             = game:GetService("Players")
-local RunService          = game:GetService("RunService")
-local UserInputService    = game:GetService("UserInputService")
-local Lighting            = game:GetService("Lighting")
+local RunService             = game:GetService("RunService")
+local UserInputService       = game:GetService("UserInputService")
+local Lighting               = game:GetService("Lighting")
 local ProximityPromptService = game:GetService("ProximityPromptService")
-local TweenService        = game:GetService("TweenService")
 
-local LocalPlayer = Players.LocalPlayer
-local Camera      = workspace.CurrentCamera
+local Camera = workspace.CurrentCamera
 
 -- ============================================================
--- SETTINGS (Central Config)
+-- SETTINGS
 -- ============================================================
 local Settings = {
-    -- Aimbot
-    AimPlayers   = false,
-    AimAnimals   = false,
-    WallCheck    = false,
-    SilentAim    = false,
-    SilentAimSmoothing = 0.15,  -- NEW: smoother lerp value
-    FOV          = 150,
-    ShowFOVCircle = false,
+    AimPlayers          = false,
+    AimAnimals          = false,
+    WallCheck           = false,
+    SilentAim           = false,
+    SilentAimSmoothing  = 0.15,
+    FOV                 = 150,
+    ShowFOVCircle       = false,
 
-    -- ESP
     PlayerName   = false,
     PlayerHP     = false,
     PlayerBox    = false,
@@ -41,48 +81,46 @@ local Settings = {
     ShowDistance = false,
     ESPDistance  = 10000,
     TextSize     = 12,
-    PlayerColor  = Color3.fromRGB(255, 0, 0),
-    AnimalColor  = Color3.fromRGB(255, 165, 0),
+    PlayerColor  = Color3.fromRGB(0, 255, 180),    -- Cyber teal
+    AnimalColor  = Color3.fromRGB(255, 200, 0),    -- Cyber gold
 
-    -- World / Utility
     InstantInteract = false,
     TPWalk          = false,
     TPWalkSpeed     = 2,
     FullBright      = false,
-    Noclip          = false,   -- NEW
-    SpeedBoost      = false,   -- NEW
-    SpeedValue      = 16,      -- NEW (default WalkSpeed is 16)
+    Noclip          = false,
+    SpeedBoost      = false,
+    SpeedValue      = 16,
 }
 
 -- ============================================================
--- FOV CIRCLE DRAWING
+-- FOV CIRCLE  (neon cyan)
 -- ============================================================
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness    = 1.5
-FOVCircle.Color        = Color3.fromRGB(255, 255, 255)
+FOVCircle.Color        = Color3.fromRGB(0, 255, 220)
 FOVCircle.Filled       = false
 FOVCircle.Transparency = 1
 FOVCircle.Visible      = false
 
 -- ============================================================
--- UI TABS & SECTIONS
+-- TABS  — cyber-themed names
 -- ============================================================
-local Main    = Window:NewTab("Combat")
-local Visuals = Window:NewTab("Visuals")
-local World   = Window:NewTab("World")
+local TabCombat  = Window:NewTab("[ COMBAT ]")
+local TabVisuals = Window:NewTab("[ VISUALS ]")
+local TabWorld   = Window:NewTab("[ WORLD ]")
 
-local CombatSec      = Main:NewSection("Aimbot Settings")
-local ESPSec         = Visuals:NewSection("Player ESP")
-local WorldESPSec    = Visuals:NewSection("World ESP")
-local VisualSettings = Visuals:NewSection("Global Visual Settings")
-local WorldSec       = World:NewSection("Utility")
-local MoveSec        = World:NewSection("Movement")  -- NEW
+-- SECTIONS
+local SecAimbot      = TabCombat:NewSection("◈ AIMBOT  PROTOCOL")
+local SecPlayerESP   = TabVisuals:NewSection("◈ PLAYER  SCANNER")
+local SecWorldESP    = TabVisuals:NewSection("◈ WORLD   SCANNER")
+local SecVisConfig   = TabVisuals:NewSection("◈ DISPLAY CONFIG")
+local SecUtility     = TabWorld:NewSection("◈ UTILITY  MODULE")
+local SecMovement    = TabWorld:NewSection("◈ MOVEMENT OVERRIDE")
 
 -- ============================================================
--- HELPER FUNCTIONS
+-- HELPERS
 -- ============================================================
-
--- Get root part from any object
 local function GetRootPart(obj)
     if obj:IsA("BasePart") then return obj end
     if obj:IsA("Model") then
@@ -93,7 +131,6 @@ local function GetRootPart(obj)
     return nil
 end
 
--- Distance from local player to world position
 local function GetDist(pos)
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
@@ -102,75 +139,54 @@ local function GetDist(pos)
     return 0
 end
 
--- Raycast visibility check
 local function IsVisible(targetPart)
     if not targetPart then return false end
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("Head") then return false end
 
-    local origin    = Camera.CFrame.Position
-    local direction = targetPart.Position - origin
-
     local params = RaycastParams.new()
     params.FilterDescendantsInstances = { char }
-    params.FilterType   = Enum.RaycastFilterType.Exclude
-    params.IgnoreWater  = true
+    params.FilterType  = Enum.RaycastFilterType.Exclude
+    params.IgnoreWater = true
 
-    local result = workspace:Raycast(origin, direction, params)
+    local result = workspace:Raycast(
+        Camera.CFrame.Position,
+        targetPart.Position - Camera.CFrame.Position,
+        params
+    )
     if result then
         return result.Instance:IsDescendantOf(targetPart.Parent)
     end
     return true
 end
 
--- Clean animal display name
 local function CleanAnimalName(obj)
     local name   = tostring(obj.Name):lower()
     local prefix = name:find("legendary") and "⭐ " or ""
-
     local nameMap = {
-        { "crow",                   "Crow"       },
-        { "dire wolf",              "Dire Wolf"  },
-        { "direwolf",               "Dire Wolf"  },
-        { "wolf",                   "Wolf"       },
-        { "coyote",                 "Coyote"     },
-        { "fox",                    "Fox"        },
-        { "grizzly",                "Grizzly"    },
-        { "black bear",             "Black Bear" },
-        { "bear",                   "Bear"       },
-        { "bison",                  "Bison"      },
-        { "buffalo",                "Bison"      },
-        { "buck",                   "Deer"       },
-        { "doe",                    "Deer"       },
-        { "fawn",                   "Deer"       },
-        { "deer",                   "Deer"       },
-        { "horse",                  "Horse"      },
-        { "cow",                    "Cow"        },
-        { "cattle",                 "Cow"        },
-        { "pig",                    "Pig"        },
-        { "boar",                   "Boar"       },
-        { "rabbit",                 "Rabbit"     },
-        { "bunny",                  "Rabbit"     },
-        { "chicken",                "Chicken"    },
+        {"crow","Crow"},{"dire wolf","Dire Wolf"},{"direwolf","Dire Wolf"},
+        {"wolf","Wolf"},{"coyote","Coyote"},{"fox","Fox"},
+        {"grizzly","Grizzly"},{"black bear","Black Bear"},{"bear","Bear"},
+        {"bison","Bison"},{"buffalo","Bison"},{"buck","Deer"},
+        {"doe","Deer"},{"fawn","Deer"},{"deer","Deer"},
+        {"horse","Horse"},{"cow","Cow"},{"cattle","Cow"},
+        {"pig","Pig"},{"boar","Boar"},{"rabbit","Rabbit"},
+        {"bunny","Rabbit"},{"chicken","Chicken"},
     }
-
-    for _, entry in ipairs(nameMap) do
-        if name:find(entry[1]) then
-            return prefix .. entry[2]
-        end
+    for _, e in ipairs(nameMap) do
+        if name:find(e[1]) then return prefix .. e[2] end
     end
     return obj.Name
 end
 
 -- ============================================================
--- AIMBOT: GET CLOSEST TARGET
+-- AIMBOT
 -- ============================================================
 local function GetClosestTarget()
-    local targetPart = nil
+    local targetPart  = nil
     local closestDist = Settings.FOV
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
-    -- Players
     if Settings.AimPlayers then
         for _, v in ipairs(Players:GetPlayers()) do
             if v == LocalPlayer then continue end
@@ -180,21 +196,16 @@ local function GetClosestTarget()
             local hum  = char:FindFirstChildOfClass("Humanoid")
             if not head or not hum or hum.Health <= 0 then continue end
             if Settings.WallCheck and not IsVisible(head) then continue end
-
             local pos, vis = Camera:WorldToViewportPoint(head.Position)
             if vis then
                 local mag = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                if mag < closestDist then
-                    targetPart  = head
-                    closestDist = mag
-                end
+                if mag < closestDist then targetPart = head; closestDist = mag end
             end
         end
     end
 
-    -- Animals / NPCs
     if Settings.AimAnimals then
-        for _, folderName in ipairs({"Harvestables", "Animals", "NPCS"}) do
+        for _, folderName in ipairs({"Harvestables","Animals","NPCS"}) do
             local folder = workspace:FindFirstChild(folderName)
             if not folder then continue end
             for _, v in ipairs(folder:GetChildren()) do
@@ -204,14 +215,10 @@ local function GetClosestTarget()
                 local rp = GetRootPart(v)
                 if not rp then continue end
                 if Settings.WallCheck and not IsVisible(rp) then continue end
-
                 local pos, vis = Camera:WorldToViewportPoint(rp.Position)
                 if vis then
                     local mag = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                    if mag < closestDist then
-                        targetPart  = rp
-                        closestDist = mag
-                    end
+                    if mag < closestDist then targetPart = rp; closestDist = mag end
                 end
             end
         end
@@ -221,22 +228,18 @@ local function GetClosestTarget()
 end
 
 -- ============================================================
--- ESP: MANAGE BILLBOARDS
+-- ESP BILLBOARD
 -- ============================================================
 local function ManageESP(char, text, color, tag, shouldShow, dist, isPlayer)
-    local rootPart
-    if isPlayer then
-        rootPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-    else
-        rootPart = GetRootPart(char)
-    end
+    local rootPart = isPlayer
+        and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart"))
+        or GetRootPart(char)
     if not rootPart then return end
 
-    local inRange = isPlayer or (dist <= Settings.ESPDistance)
+    local inRange   = isPlayer or (dist <= Settings.ESPDistance)
     local billboard = rootPart:FindFirstChild(tag)
 
     if shouldShow and inRange then
-        -- Create billboard if missing
         if not billboard then
             billboard = Instance.new("BillboardGui")
             billboard.Name        = tag
@@ -247,21 +250,20 @@ local function ManageESP(char, text, color, tag, shouldShow, dist, isPlayer)
             billboard.Parent      = rootPart
 
             local label = Instance.new("TextLabel", billboard)
-            label.Name                  = "TextL"
+            label.Name                   = "TextL"
             label.BackgroundTransparency = 1
-            label.Size                  = UDim2.new(1, 0, 1, 0)
-            label.TextStrokeTransparency = 0.4
-            label.TextStrokeColor3      = Color3.new(0, 0, 0)
-            label.Font                  = Enum.Font.SourceSansBold
-            label.TextScaled            = false
+            label.Size                   = UDim2.new(1, 0, 1, 0)
+            label.TextStrokeTransparency = 0.3
+            label.TextStrokeColor3       = Color3.new(0, 0, 0)
+            label.Font                   = Enum.Font.Code  -- monospace = cyber look
         end
 
         local label = billboard:FindFirstChild("TextL")
         if label then
-            label.TextSize  = Settings.TextSize
+            label.TextSize   = Settings.TextSize
             label.TextColor3 = color
-            local distText  = Settings.ShowDistance and ("  [" .. dist .. "m]") or ""
-            label.Text      = text .. distText
+            local distText   = Settings.ShowDistance and ("  [" .. dist .. "m]") or ""
+            label.Text       = text .. distText
         end
     else
         if billboard then billboard:Destroy() end
@@ -269,27 +271,23 @@ local function ManageESP(char, text, color, tag, shouldShow, dist, isPlayer)
 end
 
 -- ============================================================
--- ANIMAL ESP LOOP (every 1s to save performance)
+-- ANIMAL ESP LOOP
 -- ============================================================
 task.spawn(function()
     while true do
         task.wait(1)
         if not Settings.AnimalESP then continue end
-
-        for _, folderName in ipairs({"Harvestables", "Animals", "NPCS"}) do
+        for _, folderName in ipairs({"Harvestables","Animals","NPCS"}) do
             local folder = workspace:FindFirstChild(folderName)
             if not folder then continue end
             for _, v in ipairs(folder:GetChildren()) do
                 if v:IsA("Model") then
                     local rp = GetRootPart(v)
                     if rp then
-                        local dist = GetDist(rp.Position)
-                        local hum  = v:FindFirstChildOfClass("Humanoid")
-                        -- Show [DEAD] if animal is dead
+                        local dist  = GetDist(rp.Position)
+                        local hum   = v:FindFirstChildOfClass("Humanoid")
                         local label = CleanAnimalName(v)
-                        if hum and hum.Health <= 0 then
-                            label = "💀 " .. label
-                        end
+                        if hum and hum.Health <= 0 then label = "☠ " .. label end
                         ManageESP(v, label, Settings.AnimalColor, "OverlordAnimalESP", true, dist, false)
                     end
                 end
@@ -298,9 +296,8 @@ task.spawn(function()
     end
 end)
 
--- Clean up animal ESP when disabled
 local function CleanAnimalESP()
-    for _, folderName in ipairs({"Harvestables", "Animals", "NPCS"}) do
+    for _, folderName in ipairs({"Harvestables","Animals","NPCS"}) do
         local folder = workspace:FindFirstChild(folderName)
         if folder then
             for _, animal in ipairs(folder:GetChildren()) do
@@ -315,23 +312,22 @@ local function CleanAnimalESP()
 end
 
 -- ============================================================
--- NOCLIP (NEW)
+-- NOCLIP
 -- ============================================================
 RunService.Stepped:Connect(function()
-    if Settings.Noclip then
-        local char = LocalPlayer.Character
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") and part.CanCollide then
-                    part.CanCollide = false
-                end
+    if not Settings.Noclip then return end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
             end
         end
     end
 end)
 
 -- ============================================================
--- SPEED BOOST (NEW)
+-- SPEED
 -- ============================================================
 local function ApplySpeed()
     local char = LocalPlayer.Character
@@ -344,7 +340,7 @@ local function ApplySpeed()
 end
 
 -- ============================================================
--- RENDER LOOP (Main)
+-- MAIN RENDER LOOP
 -- ============================================================
 RunService.RenderStepped:Connect(function()
     -- FOV Circle
@@ -368,29 +364,28 @@ RunService.RenderStepped:Connect(function()
 
     -- Full Bright
     if Settings.FullBright then
-        Lighting.ClockTime    = 14
-        Lighting.Brightness   = 2
+        Lighting.ClockTime     = 14
+        Lighting.Brightness    = 2
         Lighting.GlobalShadows = false
-        Lighting.FogEnd       = 100000
+        Lighting.FogEnd        = 100000
     end
 
-    -- TP-Walk (Safe Speed Hack)
+    -- TP-Walk
     if Settings.TPWalk then
         local char = LocalPlayer.Character
-        if char and char:FindFirstChildOfClass("Humanoid") then
+        if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum.MoveDirection.Magnitude > 0 then
+            if hum and hum.MoveDirection.Magnitude > 0 then
                 char:TranslateBy(hum.MoveDirection * Settings.TPWalkSpeed * 0.1)
             end
         end
     end
 
-    -- Player ESP (runs every frame for accuracy)
+    -- Player ESP
     for _, p in ipairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
         local char = p.Character
         if not char then continue end
-
         local hum = char:FindFirstChildOfClass("Humanoid")
         local rp  = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
 
@@ -399,17 +394,15 @@ RunService.RenderStepped:Connect(function()
             local shouldShow = Settings.PlayerName or Settings.PlayerHP
             local dText      = ""
 
-            if Settings.PlayerName then dText = "👤 " .. p.Name end
+            if Settings.PlayerName then dText = "[ " .. p.Name .. " ]" end
             if Settings.PlayerHP then
-                local hp      = math.floor(hum.Health)
-                local maxHp   = math.floor(hum.MaxHealth)
-                local hpLine  = "❤ " .. hp .. "/" .. maxHp
-                dText = dText .. (dText ~= "" and "\n" or "") .. hpLine
+                local hp    = math.floor(hum.Health)
+                local maxHp = math.floor(hum.MaxHealth)
+                dText = dText .. (dText ~= "" and "\n" or "") .. "HP: " .. hp .. "/" .. maxHp
             end
 
             ManageESP(char, dText, Settings.PlayerColor, "OverlordPlayerESP", shouldShow, dist, true)
 
-            -- Box (Highlight)
             local highlight = char:FindFirstChild("OverlordHigh")
             if Settings.PlayerBox then
                 if not highlight then
@@ -417,15 +410,14 @@ RunService.RenderStepped:Connect(function()
                     highlight.Name   = "OverlordHigh"
                     highlight.Parent = char
                 end
-                highlight.FillColor         = Settings.PlayerColor
-                highlight.FillTransparency  = 0.6
-                highlight.OutlineColor      = Color3.new(1, 1, 1)
+                highlight.FillColor           = Settings.PlayerColor
+                highlight.FillTransparency    = 0.65
+                highlight.OutlineColor        = Color3.fromRGB(0, 255, 200)
                 highlight.OutlineTransparency = 0
             elseif highlight then
                 highlight:Destroy()
             end
         else
-            -- Cleanup dead/left players
             local b = char:FindFirstChild("OverlordPlayerESP", true)
             if b then b:Destroy() end
             local h = char:FindFirstChild("OverlordHigh")
@@ -435,89 +427,71 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================
--- UI: COMBAT SECTION
+-- UI: [ COMBAT ] TAB
 -- ============================================================
-CombatSec:NewToggle("Aim at Players",   "Right Click → Aim at players",     function(v) Settings.AimPlayers  = v end)
-CombatSec:NewToggle("Aim at Animals",   "Right Click → Aim at animals",     function(v) Settings.AimAnimals  = v end)
-CombatSec:NewToggle("Wall Check",       "Only aim at visible targets",       function(v) Settings.WallCheck   = v end)
-CombatSec:NewToggle("Silent Aim",       "Left Click → Smooth aim (no snap)", function(v) Settings.SilentAim   = v end)
-CombatSec:NewSlider("FOV Radius",       "Aim range in pixels", 800, 50,     function(v) Settings.FOV         = v end)
-CombatSec:NewSlider("Silent Aim Smoothing", "Lower = faster snap (0.05–0.5)", 50, 1, function(v)
-    Settings.SilentAimSmoothing = v / 100
-end)
-CombatSec:NewToggle("Show FOV Circle",  "Visualize aim range circle",        function(v) Settings.ShowFOVCircle = v end)
+SecAimbot:NewToggle("► TARGET PLAYERS",      "RMB → Lock onto players",          function(v) Settings.AimPlayers  = v end)
+SecAimbot:NewToggle("► TARGET ANIMALS",      "RMB → Lock onto wildlife",         function(v) Settings.AimAnimals  = v end)
+SecAimbot:NewToggle("► WALL PENETRATION OFF","Only aim at visible targets",       function(v) Settings.WallCheck   = v end)
+SecAimbot:NewToggle("► SILENT FIRE",         "LMB → Smooth silent aim",          function(v) Settings.SilentAim   = v end)
+SecAimbot:NewSlider("► FOV RADIUS",          "Lock-on range (pixels)", 800, 50,  function(v) Settings.FOV         = v end)
+SecAimbot:NewSlider("► SILENT SMOOTHING",    "1=instant  50=butter", 50, 1,      function(v) Settings.SilentAimSmoothing = v / 100 end)
+SecAimbot:NewToggle("► RENDER FOV RING",     "Show targeting perimeter",         function(v) Settings.ShowFOVCircle = v end)
 
 -- ============================================================
--- UI: PLAYER ESP SECTION
+-- UI: [ VISUALS ] TAB
 -- ============================================================
-ESPSec:NewToggle("Name ESP",   "Show player usernames",  function(v) Settings.PlayerName = v end)
-ESPSec:NewToggle("Health ESP", "Show HP / Max HP",       function(v) Settings.PlayerHP   = v end)
-ESPSec:NewToggle("Box ESP",    "Highlight player model", function(v) Settings.PlayerBox  = v end)
+SecPlayerESP:NewToggle("► SCAN: USERNAME",   "Render player identity tag",       function(v) Settings.PlayerName = v end)
+SecPlayerESP:NewToggle("► SCAN: HEALTH BAR", "Render HP / MaxHP",               function(v) Settings.PlayerHP   = v end)
+SecPlayerESP:NewToggle("► SCAN: BODY BOX",   "Highlight player silhouette",      function(v) Settings.PlayerBox  = v end)
 
--- ============================================================
--- UI: WORLD ESP SECTION
--- ============================================================
-WorldESPSec:NewToggle("Enable Animal ESP", "Show wildlife (includes dead)", function(v)
+SecWorldESP:NewToggle("► FAUNA TRACKER",     "Detect all wildlife (dead/alive)", function(v)
     Settings.AnimalESP = v
     if not v then CleanAnimalESP() end
 end)
-WorldESPSec:NewToggle("Show Distance", "Display distance to target", function(v) Settings.ShowDistance = v end)
+SecWorldESP:NewToggle("► DISTANCE OVERLAY",  "Show range to targets",            function(v) Settings.ShowDistance = v end)
+
+SecVisConfig:NewSlider("► MAX FAUNA RANGE",  "Fauna ESP max distance", 20000, 500, function(v) Settings.ESPDistance = v end)
+SecVisConfig:NewSlider("► LABEL SIZE",        "Tag font size",         20, 8,      function(v) Settings.TextSize    = v end)
+SecVisConfig:NewColorPicker("► PLAYER TAG COLOR", "Player label tint",  Settings.PlayerColor, function(v) Settings.PlayerColor = v end)
+SecVisConfig:NewColorPicker("► FAUNA TAG COLOR",  "Wildlife label tint",Settings.AnimalColor, function(v) Settings.AnimalColor = v end)
 
 -- ============================================================
--- UI: VISUAL SETTINGS
+-- UI: [ WORLD ] TAB
 -- ============================================================
-VisualSettings:NewSlider("Max Animal ESP Range", "Max distance (studs)", 20000, 500, function(v) Settings.ESPDistance = v end)
-VisualSettings:NewSlider("Text Size",            "ESP label font size",   20, 8,    function(v) Settings.TextSize    = v end)
-VisualSettings:NewColorPicker("Player ESP Color", "Color for player labels", Settings.PlayerColor, function(v) Settings.PlayerColor = v end)
-VisualSettings:NewColorPicker("Animal ESP Color", "Color for animal labels", Settings.AnimalColor, function(v) Settings.AnimalColor = v end)
+SecUtility:NewToggle("► FULLBRIGHT OVERRIDE", "Force max light / no fog",         function(v) Settings.FullBright      = v end)
+SecUtility:NewToggle("► INSTANT PROMPT",      "Zero hold duration on interact",   function(v) Settings.InstantInteract = v end)
+SecUtility:NewToggle("► TP-WALK",             "Safe teleport movement hack",      function(v) Settings.TPWalk          = v end)
+SecUtility:NewSlider("► TP SPEED FACTOR",     "TP-Walk multiplier", 15, 1,        function(v) Settings.TPWalkSpeed     = v end)
 
--- ============================================================
--- UI: WORLD / UTILITY SECTION
--- ============================================================
-WorldSec:NewToggle("Full Bright",        "Remove darkness & fog",     function(v) Settings.FullBright      = v end)
-WorldSec:NewToggle("Instant Interact",   "Skip hold duration prompts",function(v) Settings.InstantInteract = v end)
-WorldSec:NewToggle("TP-Walk",            "Safe teleport speed hack",  function(v) Settings.TPWalk          = v end)
-WorldSec:NewSlider("TP Speed",           "TP-Walk speed factor", 15, 1, function(v) Settings.TPWalkSpeed   = v end)
-
--- ============================================================
--- UI: MOVEMENT SECTION (NEW)
--- ============================================================
-MoveSec:NewToggle("Noclip", "Walk through walls", function(v)
+SecMovement:NewToggle("► NOCLIP",             "Phase through geometry",           function(v)
     Settings.Noclip = v
-    -- Restore collision on disable
     if not v then
         local char = LocalPlayer.Character
         if char then
             for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
-                end
+                if part:IsA("BasePart") then part.CanCollide = true end
             end
         end
     end
 end)
-
-MoveSec:NewToggle("Speed Boost", "Increase walk speed", function(v)
+SecMovement:NewToggle("► SPEED OVERRIDE",     "Boost walk speed",                 function(v)
     Settings.SpeedBoost = v
     ApplySpeed()
 end)
-
-MoveSec:NewSlider("Walk Speed", "Custom speed (default 16)", 100, 16, function(v)
+SecMovement:NewSlider("► WALK SPEED",         "Speed units (default 16)", 100, 16, function(v)
     Settings.SpeedValue = v
     ApplySpeed()
 end)
 
 -- ============================================================
--- PROXIMITY PROMPT: INSTANT INTERACT
+-- PROXIMITY PROMPT INSTANT
 -- ============================================================
 ProximityPromptService.PromptShown:Connect(function(prompt)
-    if Settings.InstantInteract then
-        prompt.HoldDuration = 0
-    end
+    if Settings.InstantInteract then prompt.HoldDuration = 0 end
 end)
 
 -- ============================================================
--- CHARACTER RESPAWN: RE-APPLY SPEED
+-- RESPAWN — RE-APPLY SPEED
 -- ============================================================
 LocalPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("Humanoid", 5)
@@ -525,6 +499,11 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 -- ============================================================
--- STARTUP NOTIFY
+-- FINAL BOOT NOTIFY
 -- ============================================================
-Library:Notify("✅ Script Loaded", "Yusuf Westbound OP — Improved Version", 5)
+task.wait(0.5)
+CyberNotify(
+    "◈ CYBER//WEST  [ ARMED ]",
+    "[ ALL MODULES ONLINE ]  Operator: " .. LocalPlayer.Name,
+    6
+)
