@@ -118,8 +118,8 @@ local Gui = Make("ScreenGui", {
 -- ============================================================
 local Win = Make("Frame", {
     Name                 = "Window",
-    Size                 = UDim2.new(0, 560, 0, 490),
-    Position             = UDim2.new(0.5, -280, 0.5, -245),
+    Size                 = UDim2.new(0, 580, 0, 520),
+    Position             = UDim2.new(0.5, -290, 0.5, -260),
     BackgroundColor3     = C.BG,
     BackgroundTransparency = 0.06,
     BorderSizePixel      = 0,
@@ -127,24 +127,8 @@ local Win = Make("Frame", {
 Corner(Win, 6)
 Stroke(Win, C.Red, 1.5)
 
--- Drag logic
-do
-    local drag, dStart, wStart
-    Win.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            drag = true; dStart = i.Position; wStart = Win.Position
-        end
-    end)
-    Win.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
-    end)
-    UserInputService.InputChanged:Connect(function(i)
-        if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-            local d = i.Position - dStart
-            Win.Position = UDim2.new(wStart.X.Scale, wStart.X.Offset + d.X, wStart.Y.Scale, wStart.Y.Offset + d.Y)
-        end
-    end)
-end
+-- Drag logic (TitleBar only)
+-- Will be attached after TitleBar is created
 
 -- ============================================================
 -- TITLE BAR
@@ -165,7 +149,7 @@ Make("Frame", {
 Make("TextLabel", {
     Size = UDim2.new(1,-50,1,0), Position = UDim2.new(0,14,0,0),
     BackgroundTransparency = 1,
-    Text = "CYBER//WEST   |   OPERATOR: "..LocalPlayer.Name.."   |   ONLINE",
+    Text = "Mosab Westbound   |   OPERATOR: "..LocalPlayer.Name.."   |   ONLINE",
     TextColor3 = C.White, TextSize = 12, Font = Enum.Font.GothamBold,
     TextXAlignment = Enum.TextXAlignment.Left,
 }, TBar)
@@ -178,6 +162,33 @@ local XBtn = Make("TextButton", {
 }, TBar)
 Corner(XBtn, 4)
 XBtn.MouseButton1Click:Connect(function() Gui:Destroy() end)
+
+-- Drag from TitleBar only
+do
+    local drag, dStart, wStart
+    TBar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            drag = true; dStart = i.Position; wStart = Win.Position
+        end
+    end)
+    TBar.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = i.Position - dStart
+            Win.Position = UDim2.new(wStart.X.Scale, wStart.X.Offset + d.X, wStart.Y.Scale, wStart.Y.Offset + d.Y)
+        end
+    end)
+end
+
+-- RightCtrl: toggle visibility
+UserInputService.InputBegan:Connect(function(i, gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.RightControl then
+        Win.Visible = not Win.Visible
+    end
+end)
 
 -- ============================================================
 -- INFO BAR  (THREAT / ENCRYPTION / SESSION)
@@ -297,21 +308,21 @@ local function NewSection(page, title)
     -- ── Toggle ──
     local function NewToggle(label, desc, cb)
         local row = Make("Frame", {
-            Size=UDim2.new(1,0,0,38), BackgroundColor3=C.BG2,
+            Size=UDim2.new(1,0,0,44), BackgroundColor3=C.BG2,
             BorderSizePixel=0, LayoutOrder=nextOrder(), Parent=sec,
         })
         Corner(row,4); Stroke(row,C.Border)
 
         Make("TextLabel", {
-            Size=UDim2.new(1,-60,0,18), Position=UDim2.new(0,10,0,4),
+            Size=UDim2.new(1,-60,0,20), Position=UDim2.new(0,12,0,5),
             BackgroundTransparency=1, Text=label,
-            TextColor3=C.White, TextSize=12, Font=Enum.Font.GothamBold,
+            TextColor3=C.White, TextSize=13, Font=Enum.Font.GothamBold,
             TextXAlignment=Enum.TextXAlignment.Left,
         }, row)
         Make("TextLabel", {
-            Size=UDim2.new(1,-60,0,14), Position=UDim2.new(0,10,0,22),
+            Size=UDim2.new(1,-60,0,16), Position=UDim2.new(0,12,0,25),
             BackgroundTransparency=1, Text=desc,
-            TextColor3=C.Gray, TextSize=9, Font=Enum.Font.Gotham,
+            TextColor3=C.Gray, TextSize=10, Font=Enum.Font.Gotham,
             TextXAlignment=Enum.TextXAlignment.Left,
         }, row)
 
@@ -346,45 +357,55 @@ local function NewSection(page, title)
     -- ── Slider ──
     local function NewSlider(label, desc, maxV, minV, cb)
         local row = Make("Frame", {
-            Size=UDim2.new(1,0,0,52), BackgroundColor3=C.BG2,
+            Size=UDim2.new(1,0,0,64), BackgroundColor3=C.BG2,
             BorderSizePixel=0, LayoutOrder=nextOrder(), Parent=sec,
         })
         Corner(row,4); Stroke(row,C.Border)
 
         Make("TextLabel", {
-            Size=UDim2.new(0.7,0,0,18), Position=UDim2.new(0,10,0,4),
+            Size=UDim2.new(0.7,0,0,20), Position=UDim2.new(0,12,0,6),
             BackgroundTransparency=1, Text=label,
-            TextColor3=C.White, TextSize=12, Font=Enum.Font.GothamBold,
+            TextColor3=C.White, TextSize=13, Font=Enum.Font.GothamBold,
             TextXAlignment=Enum.TextXAlignment.Left,
         }, row)
 
         local valLbl = Make("TextLabel", {
-            Size=UDim2.new(0.3,-10,0,18), Position=UDim2.new(0.7,0,0,4),
+            Size=UDim2.new(0.3,-12,0,20), Position=UDim2.new(0.7,0,0,6),
             BackgroundTransparency=1, Text=tostring(minV),
-            TextColor3=C.Accent, TextSize=12, Font=Enum.Font.GothamBold,
+            TextColor3=C.Accent, TextSize=13, Font=Enum.Font.GothamBold,
             TextXAlignment=Enum.TextXAlignment.Right,
         }, row)
 
         Make("TextLabel", {
-            Size=UDim2.new(1,-20,0,12), Position=UDim2.new(0,10,0,23),
+            Size=UDim2.new(1,-20,0,14), Position=UDim2.new(0,12,0,27),
             BackgroundTransparency=1, Text=desc,
-            TextColor3=C.Gray, TextSize=9, Font=Enum.Font.Gotham,
+            TextColor3=C.Gray, TextSize=10, Font=Enum.Font.Gotham,
             TextXAlignment=Enum.TextXAlignment.Left,
         }, row)
 
-        local track = Make("Frame", {
-            Size=UDim2.new(1,-20,0,4), Position=UDim2.new(0,10,0,40),
-            BackgroundColor3=C.Border, BorderSizePixel=0,
+        -- bigger track = easier to click
+        local trackBg = Make("Frame", {
+            Size=UDim2.new(1,-24,0,16), Position=UDim2.new(0,12,0,44),
+            BackgroundColor3=C.RedDark, BorderSizePixel=0,
         }, row)
-        Corner(track,2)
+        Corner(trackBg,8)
+        Stroke(trackBg, C.Border, 1)
+
         local fill = Make("Frame", {
             Size=UDim2.new(0,0,1,0), BackgroundColor3=C.Red, BorderSizePixel=0,
-        }, track)
-        Corner(fill,2)
+        }, trackBg)
+        Corner(fill,8)
+
+        -- knob circle on fill
+        local knobDot = Make("Frame", {
+            Size=UDim2.new(0,14,0,14), Position=UDim2.new(1,-14,0.5,-7),
+            BackgroundColor3=C.White, BorderSizePixel=0,
+        }, fill)
+        Corner(knobDot,7)
 
         local function SetVal(v)
             v = math.clamp(math.floor(v), minV, maxV)
-            local pct = (v-minV)/(maxV-minV)
+            local pct = (maxV==minV) and 0 or (v-minV)/(maxV-minV)
             fill.Size = UDim2.new(pct,0,1,0)
             valLbl.Text = tostring(v)
             cb(v)
@@ -392,11 +413,19 @@ local function NewSection(page, title)
         SetVal(minV)
 
         local sliding = false
-        track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=true end end)
-        UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=false end end)
+        trackBg.InputBegan:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 then
+                sliding=true
+                local pct = math.clamp((i.Position.X - trackBg.AbsolutePosition.X)/trackBg.AbsoluteSize.X, 0, 1)
+                SetVal(minV + pct*(maxV-minV))
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=false end
+        end)
         UserInputService.InputChanged:Connect(function(i)
             if sliding and i.UserInputType==Enum.UserInputType.MouseMovement then
-                local pct = math.clamp((i.Position.X - track.AbsolutePosition.X)/track.AbsoluteSize.X, 0, 1)
+                local pct = math.clamp((i.Position.X - trackBg.AbsolutePosition.X)/trackBg.AbsoluteSize.X, 0, 1)
                 SetVal(minV + pct*(maxV-minV))
             end
         end)
