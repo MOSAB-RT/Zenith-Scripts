@@ -832,14 +832,59 @@ task.spawn(function()
 end)
 
 
--- God Mode loop — يرجع الـ HP لـ max كل 0.1 ثانية
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if not S.GodMode then continue end
-        local c=LocalPlayer.Character; if not c then continue end
-        local h=c:FindFirstChildOfClass("Humanoid"); if not h then continue end
-        if h.Health < h.MaxHealth then h.Health = h.MaxHealth end
+-- ── GOD MODE ─────────────────────────────────────────────
+local godConns = {}
+
+local function ApplyGodMode(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    -- رفع الـ MaxHealth والـ Health لرقم ضخم
+    hum.MaxHealth = math.huge
+    hum.Health    = math.huge
+
+    -- منع الـ Died من يشتغل
+    local c1 = hum.HealthChanged:Connect(function()
+        if S.GodMode and hum.Health < 9e+99 then
+            hum.MaxHealth = math.huge
+            hum.Health    = math.huge
+        end
+    end)
+
+    -- منع BreakJoints (الموت الفوري)
+    local c2 = char.ChildAdded:Connect(function(obj)
+        if S.GodMode and obj.Name == "BreakJointsOnDeath" then
+            obj:Destroy()
+        end
+    end)
+
+    table.insert(godConns, c1)
+    table.insert(godConns, c2)
+end
+
+local function RemoveGodMode()
+    for _, c in ipairs(godConns) do c:Disconnect() end
+    table.clear(godConns)
+    local char = LocalPlayer.Character; if not char then return end
+    local hum  = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    hum.MaxHealth = 100
+    hum.Health    = 100
+end
+
+local function SetGodMode(on)
+    if on then
+        ApplyGodMode(LocalPlayer.Character)
+    else
+        RemoveGodMode()
+    end
+end
+
+-- اذا respawn وGod Mode شغال، نعيد تطبيقه
+LocalPlayer.CharacterAdded:Connect(function(c)
+    if S.GodMode then
+        task.wait(0.2)
+        ApplyGodMode(c)
     end
 end)
 
@@ -870,7 +915,7 @@ SU.NewToggle("Instant Interact", "Zero hold on prompts",           function(v) S
 SU.NewToggle("TP-Walk",          "Safe teleport movement hack",    function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1,  function(v) S.TPSpeed=v end)
 
-SM.NewToggle("God Mode",   "Max HP — cannot die",           function(v) S.GodMode=v end)
+SM.NewToggle("God Mode",   "Infinite HP — cannot die",      function(v) S.GodMode=v; SetGodMode(v) end)
 SM.NewToggle("Noclip",     "Phase through walls", function(v)
     S.Noclip=v; SetNoclip(v)
 end)
