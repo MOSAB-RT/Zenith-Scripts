@@ -1,6 +1,8 @@
 -- ╔══════════════════════════════════════════════╗
---   Mosab Westbound  |  GLASS UI  |  v7
+--   Mosab Westbound  |  GLASS UI  |  v8
 --   RightCtrl = Hide/Show  |  Drag TitleBar
+--   FIXES: shared input connections, FOV optimized,
+--          ESP cleanup, GodMod stable, no freeze
 -- ╚══════════════════════════════════════════════╝
 
 local Players     = game:GetService("Players")
@@ -62,6 +64,28 @@ local function Pulse(f)
     task.delay(0.07,function() twS(f,0.22,{Size=s}) end)
 end
 
+-- ╔══════════════════════════════════════════════╗
+--   SHARED INPUT CONNECTIONS (FIX: no per-widget connections)
+--   بدل ما كل widget يعمل UIS connection خاص،
+--   عندنا connection واحد مشترك للكل
+-- ╚══════════════════════════════════════════════╝
+local _activeSlider  = nil   -- fn(px) للـ slider الحالي
+local _activeCPSlide = nil   -- fn(px) للـ color picker الحالي
+
+UIS.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        _activeSlider  = nil
+        _activeCPSlide = nil
+    end
+end)
+
+UIS.InputChanged:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseMovement then
+        if _activeSlider  then _activeSlider(i.Position.X)  end
+        if _activeCPSlide then _activeCPSlide(i.Position.X) end
+    end
+end)
+
 -- ── GUI ROOT ─────────────────────────────────
 local Gui=New("ScreenGui",{
     Name="GlassWest",ResetOnSpawn=false,
@@ -107,7 +131,13 @@ local XBtn=New("TextButton",{
 Corner(XBtn,6); Outline(XBtn,C.NeonBr,1,0.4)
 XBtn.MouseEnter:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.Neon}) end)
 XBtn.MouseLeave:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.NeonDk}) end)
-XBtn.MouseButton1Click:Connect(function() Pulse(XBtn); task.delay(0.12,function() Gui:Destroy() end) end)
+XBtn.MouseButton1Click:Connect(function()
+    Pulse(XBtn)
+    task.delay(0.12,function()
+        FOVC:Remove()   -- تنظيف Drawing قبل الحذف
+        Gui:Destroy()
+    end)
+end)
 
 -- Drag
 do
@@ -118,6 +148,8 @@ do
     TBar.InputEnded:Connect(function(i)
         if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
     end)
+    -- FIX: drag يستخدم الـ shared connection عبر flag محلي بدل connection منفصل
+    -- لكن Drag يحتاج connection خاص لأنه مرتبط بـ Win وليس widget
     UIS.InputChanged:Connect(function(i)
         if drag and i.UserInputType==Enum.UserInputType.MouseMovement then
             local d=i.Position-ds
@@ -207,18 +239,20 @@ for idx,ch in ipairs({
     local fi=New("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=ch.col,BorderSizePixel=0,ZIndex=902},tr)
     Corner(fi,6)
     local cpBtn=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=903},tr)
-    local cpSliding=false
+
+    -- FIX: بدل UIS connections منفصلة، نسجل fn في _activeCPSlide
     local function cpSet(px)
+        if not CPop.Visible then return end
         local pct=math.clamp((px-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
         cpRGB[ch.k]=math.floor(pct*255); fi.Size=UDim2.new(pct,0,1,0); valLbl.Text=tostring(cpRGB[ch.k])
         local col=Color3.fromRGB(cpRGB.r,cpRGB.g,cpRGB.b)
         for _,cb in ipairs(cpCBs) do cb(col) end
     end
-    cpBtn.MouseButton1Down:Connect(function() cpSliding=true end)
-    UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then cpSliding=false end end)
-    UIS.InputChanged:Connect(function(i)
-        if cpSliding and i.UserInputType==Enum.UserInputType.MouseMovement then cpSet(i.Position.X) end
+    cpBtn.MouseButton1Down:Connect(function(x,_)
+        _activeCPSlide = cpSet
+        cpSet(x)
     end)
+
     cpSliders[ch.k]={tr=tr,fi=fi,vl=valLbl}
 end
 
@@ -325,9 +359,7 @@ local function MakeSection(page,title)
     end
 
     -- ── SLIDER ───────────────────────────────
-    -- الحل الصح: TextButton فوق الـ track مباشرة
-    -- MouseButton1Down يبدأ الـ sliding — مو InputBegan
-    -- UIS.InputChanged و InputEnded للـ drag
+    -- FIX: استخدام _activeSlider المشترك بدل connections فردية
     local function NewSlider(lbl,desc,maxV,minV,cb)
         local row=MakeRow(68)
         New("TextLabel",{Size=UDim2.new(0.65,0,0,20),Position=UDim2.new(0,12,0,5),BackgroundTransparency=1,
@@ -339,7 +371,6 @@ local function MakeSection(page,title)
         New("TextLabel",{Size=UDim2.new(1,-24,0,13),Position=UDim2.new(0,12,0,26),BackgroundTransparency=1,
             Text=desc,TextColor3=C.Muted,TextSize=10,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=15},row)
 
-        -- track
         local track=New("Frame",{Size=UDim2.new(1,-24,0,16),Position=UDim2.new(0,12,0,44),
             BackgroundColor3=C.NeonDk,BorderSizePixel=0,ZIndex=15},row)
         Corner(track,8); Outline(track,C.BorderDk,1,0.4)
@@ -348,12 +379,10 @@ local function MakeSection(page,title)
         Corner(fill,8)
         Grad(fill,C.NeonBr,C.Neon,180)
 
-        -- dot: child of track, positioned by pct
         local dot=New("Frame",{Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,-8,0.5,-8),
             BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=18},track)
         Corner(dot,8); Outline(dot,C.Muted,1,0.3)
 
-        local sliding=false
         local function SetPct(px)
             local ap=track.AbsolutePosition
             local as=track.AbsoluteSize
@@ -366,26 +395,19 @@ local function MakeSection(page,title)
             vLbl.Text=tostring(v)
             cb(v)
         end
-        SetPct(track.AbsolutePosition.X) -- init = min
 
-        -- Button directly on top of track — receives Mouse events reliably
+        -- Init at min value
+        task.defer(function() SetPct(track.AbsolutePosition.X) end)
+
         local tBtn=New("TextButton",{Size=UDim2.new(1,10,1,10),Position=UDim2.new(0,-5,0.5,-8),
             BackgroundTransparency=1,Text="",ZIndex=19},track)
 
+        -- FIX: نسجل الـ fn في _activeSlider بدل ما نعمل UIS connection جديد
         tBtn.MouseButton1Down:Connect(function(x,_)
-            sliding=true
+            _activeSlider = SetPct
             SetPct(x)
         end)
-        UIS.InputEnded:Connect(function(i)
-            if i.UserInputType==Enum.UserInputType.MouseButton1 then sliding=false end
-        end)
-        UIS.InputChanged:Connect(function(i)
-            if sliding and i.UserInputType==Enum.UserInputType.MouseMovement then
-                SetPct(i.Position.X)
-            end
-        end)
 
-        -- hover on row
         local hb=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=14},row)
         hb.MouseEnter:Connect(function() tw(row,0.12,{BackgroundTransparency=0.1}) end)
         hb.MouseLeave:Connect(function() tw(row,0.12,{BackgroundTransparency=0.3}) end)
@@ -513,6 +535,7 @@ local function ManageESP(char,text,color,tag,show,dist,isP)
         if lb then lb.TextSize=S.TextSize; lb.TextColor3=color; lb.Text=text..(S.ShowDist and ("  ["..dist.."m]") or "") end
     else if bb then bb:Destroy() end end
 end
+
 local function CleanAESP()
     for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
         local f=workspace:FindFirstChild(fn); if not f then continue end
@@ -522,42 +545,51 @@ local function CleanAESP()
     end
 end
 
-task.spawn(function() while true do task.wait(1)
-    if not S.AnimalESP then continue end
-    for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
-        local folder=workspace:FindFirstChild(fn); if not folder then continue end
-        for _,v in ipairs(folder:GetChildren()) do
-            if not v:IsA("Model") then continue end
-            local rp=GetRoot(v); if not rp then continue end
-            local hum=v:FindFirstChildOfClass("Humanoid")
-            local lb=AName(v); if hum and hum.Health<=0 then lb="[DEAD] "..lb end
-            ManageESP(v,lb,S.AnimalColor,"GWANIM",true,GetDist(rp.Position),false)
+-- FIX: Animal ESP loop — task.wait(1) كافي، مفيش فريز
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if not S.AnimalESP then continue end
+        for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
+            local folder=workspace:FindFirstChild(fn); if not folder then continue end
+            for _,v in ipairs(folder:GetChildren()) do
+                if not v:IsA("Model") then continue end
+                local rp=GetRoot(v); if not rp then continue end
+                local hum=v:FindFirstChildOfClass("Humanoid")
+                local lb=AName(v); if hum and hum.Health<=0 then lb="[DEAD] "..lb end
+                ManageESP(v,lb,S.AnimalColor,"GWANIM",true,GetDist(rp.Position),false)
+                task.wait()  -- FIX: نعطي frame بين كل حيوان عشان مو فريم واحد يعالج كلهم
+            end
         end
     end
-end end)
+end)
 
-task.spawn(function() while true do task.wait(0.1)
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p==LocalPlayer then continue end
-        local c=p.Character; if not c then continue end
-        local hum=c:FindFirstChildOfClass("Humanoid")
-        local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
-        if rp and hum and hum.Health>0 then
-            local dist=GetDist(rp.Position); local show=S.PlayerName or S.PlayerHP; local txt=""
-            if S.PlayerName then txt="[ "..p.Name.." ]" end
-            if S.PlayerHP then txt=txt..(txt~="" and "\n" or "").."HP "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth) end
-            ManageESP(c,txt,S.PlayerColor,"GWPLYR",show,dist,true)
-            local hl=c:FindFirstChild("GWPH")
-            if S.PlayerBox then
-                if not hl then hl=Instance.new("Highlight"); hl.Name="GWPH"; hl.Parent=c end
-                hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65; hl.OutlineColor=C.Neon; hl.OutlineTransparency=0
-            elseif hl then hl:Destroy() end
-        else
-            local b=c:FindFirstChild("GWPLYR",true); if b then b:Destroy() end
-            local hl=c:FindFirstChild("GWPH"); if hl then hl:Destroy() end
+-- FIX: Player ESP loop — task.wait(0.1) كافي
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p==LocalPlayer then continue end
+            local c=p.Character; if not c then continue end
+            local hum=c:FindFirstChildOfClass("Humanoid")
+            local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
+            if rp and hum and hum.Health>0 then
+                local dist=GetDist(rp.Position); local show=S.PlayerName or S.PlayerHP; local txt=""
+                if S.PlayerName then txt="[ "..p.Name.." ]" end
+                if S.PlayerHP then txt=txt..(txt~="" and "\n" or "").."HP "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth) end
+                ManageESP(c,txt,S.PlayerColor,"GWPLYR",show,dist,true)
+                local hl=c:FindFirstChild("GWPH")
+                if S.PlayerBox then
+                    if not hl then hl=Instance.new("Highlight"); hl.Name="GWPH"; hl.Parent=c end
+                    hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65; hl.OutlineColor=C.Neon; hl.OutlineTransparency=0
+                elseif hl then hl:Destroy() end
+            else
+                local b=c:FindFirstChild("GWPLYR",true); if b then b:Destroy() end
+                local hl=c:FindFirstChild("GWPH"); if hl then hl:Destroy() end
+            end
         end
     end
-end end)
+end)
 
 -- Noclip
 local noclipConn
@@ -581,30 +613,14 @@ local function ApplySpeed()
 end
 
 -- ╔══════════════════════════════════════════════╗
---   GODMOD — درع أزرق لا نهائي
---
---   الدرع ينتهي في 3 حالات:
---   1) سحبت سلاح  → نمنع كل سلاح يتجهز
---   2) مرت 30 ثانية → نعمل respawn كل 28 ثانية
---   3) مت ورسبنت  → CharacterAdded يعيد التطبيق
+--   GODMOD — shield block weapons
 -- ╚══════════════════════════════════════════════╝
-local godModConn    = nil
-local godModTimer   = nil
-local godModActive  = false
-
-local function ForceRespawn()
-    -- نستخدم LoadCharacter لإعادة الـ spawn
-    -- هذا يرجع الدرع من جديد (30 ثانية كاملة)
-    pcall(function()
-        LocalPlayer:LoadCharacter()
-    end)
-end
+local godModConn  = nil
+local godModActive= false
 
 local function BlockWeapons(char)
-    -- منع أي سلاح يتجهز — يحافظ على الدرع
     if godModConn then godModConn:Disconnect(); godModConn=nil end
     if not char then return end
-
     godModConn = char.ChildAdded:Connect(function(obj)
         if not godModActive then return end
         if obj:IsA("Tool") then
@@ -616,8 +632,6 @@ local function BlockWeapons(char)
             end)
         end
     end)
-
-    -- أرجع أي سلاح موجود الآن
     for _, obj in ipairs(char:GetChildren()) do
         if obj:IsA("Tool") then
             local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
@@ -626,42 +640,48 @@ local function BlockWeapons(char)
     end
 end
 
-local function StartGodModTimer()
-    -- LoadCharacter يطرد من السيرفر — لا نستخدمه
-    -- نكتفي بـ BlockWeapons فقط
-end
-
-local function ApplyGodMod(char)
-    BlockWeapons(char)
-end
-
 local function RemoveGodMod()
     godModActive = false
     if godModConn then godModConn:Disconnect(); godModConn=nil end
-    if godModTimer then task.cancel(godModTimer); godModTimer=nil end
 end
 
 local function SetGodMod(on)
     if on then
         godModActive = true
-        ApplyGodMod(LocalPlayer.Character)
-        StartGodModTimer()
+        BlockWeapons(LocalPlayer.Character)
     else
         RemoveGodMod()
     end
 end
 
 LocalPlayer.CharacterAdded:Connect(function(c)
-    task.wait(0.5) -- انتظر الشخصية تحمل والدرع يظهر
+    task.wait(0.5)
     if S.GodMod and godModActive then BlockWeapons(c) end
-    if S.SpeedBoost then local h=c:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=S.SpeedVal end end
-    if S.Noclip     then task.wait(0.1); SetNoclip(true) end
+    if S.SpeedBoost then
+        local h=c:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed=S.SpeedVal end
+    end
+    if S.Noclip then task.wait(0.1); SetNoclip(true) end
 end)
 
--- Render Loop
+-- ╔══════════════════════════════════════════════╗
+--   RENDER LOOP
+--   FIX: FOV Drawing فقط لما يكون مفعّل
+--        FullBright مرة كل ثانية بدل كل frame
+-- ╚══════════════════════════════════════════════╝
+local _lastFBTime = 0
+
 Run.RenderStepped:Connect(function()
-    FOVC.Visible=S.ShowFOV; FOVC.Radius=S.FOV
-    FOVC.Position=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
+    -- FIX: FOV circle — تحديث فقط لما مفعّل
+    if S.ShowFOV then
+        FOVC.Visible = true
+        FOVC.Radius  = S.FOV
+        FOVC.Position= Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
+    else
+        FOVC.Visible = false
+    end
+
+    -- Aimbot
     local ap=GetTarget()
     if ap then
         if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
@@ -671,19 +691,30 @@ Run.RenderStepped:Connect(function()
             Cam.CFrame=Cam.CFrame:Lerp(CFrame.new(Cam.CFrame.Position,ap.Position),S.SilentSmooth)
         end
     end
+
+    -- TPWalk
     if S.TPWalk then
         local c=LocalPlayer.Character; if c then
             local h=c:FindFirstChildOfClass("Humanoid")
             if h and h.MoveDirection.Magnitude>0 then c:TranslateBy(h.MoveDirection*S.TPSpeed*0.1) end
         end
     end
+
+    -- FIX: FullBright — نطبقه مرة كل ثانية بدل كل frame (يخفف الضغط)
     if S.FullBright then
-        Light.ClockTime=14; Light.Brightness=2; Light.GlobalShadows=false; Light.FogEnd=100000
+        local now = tick()
+        if now - _lastFBTime >= 1 then
+            _lastFBTime = now
+            Light.ClockTime   = 14
+            Light.Brightness  = 2
+            Light.GlobalShadows = false
+            Light.FogEnd      = 100000
+        end
     end
 end)
 
 -- ╔══════════════════════════════════════════════╗
---   POPULATE
+--   POPULATE WIDGETS
 -- ╚══════════════════════════════════════════════╝
 SA.NewToggle("Target Players",   "RMB — Lock onto players",          function(v) S.AimPlayers=v end)
 SA.NewToggle("Target Animals",   "RMB — Lock onto wildlife",         function(v) S.AimAnimals=v end)
@@ -711,10 +742,10 @@ SU.NewToggle("Instant Interact", "Zero hold on prompts",          function(v) S.
 SU.NewToggle("TP-Walk",          "Teleport movement hack",        function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1, function(v) S.TPSpeed=v end)
 
-SM.NewToggle("GodMod", "Keeps spawn shield active forever", function(v) S.GodMod=v; SetGodMod(v) end)
-SM.NewToggle("Noclip",        "Phase through walls",           function(v) S.Noclip=v; SetNoclip(v) end)
-SM.NewToggle("Speed Boost",   "Override walk speed",           function(v) S.SpeedBoost=v; ApplySpeed() end)
-SM.NewSlider("Walk Speed",    "Speed value (default 16)",100,16,function(v) S.SpeedVal=v; ApplySpeed() end)
+SM.NewToggle("GodMod",      "Keeps spawn shield active forever", function(v) S.GodMod=v; SetGodMod(v) end)
+SM.NewToggle("Noclip",      "Phase through walls",               function(v) S.Noclip=v; SetNoclip(v) end)
+SM.NewToggle("Speed Boost", "Override walk speed",               function(v) S.SpeedBoost=v; ApplySpeed() end)
+SM.NewSlider("Walk Speed",  "Speed value (default 16)",100,16,   function(v) S.SpeedVal=v; ApplySpeed() end)
 
 PPS.PromptShown:Connect(function(p) if S.Interact then p.HoldDuration=0 end end)
 
