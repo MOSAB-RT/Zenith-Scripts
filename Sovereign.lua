@@ -35,9 +35,9 @@ local function CyberNotify(title, body, dur)
     end)
 end
 
-CyberNotify("◈ CYBER//WEST", "[ IDENTITY VERIFIED ] Welcome, " .. LocalPlayer.Name, 5)
+CyberNotify("CYBER//WEST", "[ IDENTITY VERIFIED ] Welcome, " .. LocalPlayer.Name, 5)
 task.wait(0.5)
-CyberNotify("◈ SYS INIT", "[ LOADING MODULES... ] Stand by.", 3)
+CyberNotify("SYS INIT", "[ LOADING MODULES... ] Stand by.", 3)
 task.wait(0.8)
 
 -- ============================================================
@@ -48,7 +48,7 @@ local Library = loadstring(game:HttpGet(
 ))()
 
 local Window = Library.CreateLib(
-    "◈ CYBER//WEST  ·  OPERATOR: " .. LocalPlayer.Name .. "  ·  STATUS: ONLINE",
+    "CYBER//WEST  |  OPERATOR: " .. LocalPlayer.Name .. "  |  STATUS: ONLINE",
     "GrapeTheme"
 )
 
@@ -106,17 +106,17 @@ FOVCircle.Visible      = false
 -- ============================================================
 -- TABS  — cyber-themed names
 -- ============================================================
-local TabCombat  = Window:NewTab("[ COMBAT ]")
-local TabVisuals = Window:NewTab("[ VISUALS ]")
-local TabWorld   = Window:NewTab("[ WORLD ]")
+local TabCombat  = Window:NewTab("COMBAT")
+local TabVisuals = Window:NewTab("VISUALS")
+local TabWorld   = Window:NewTab("WORLD")
 
 -- SECTIONS
-local SecAimbot      = TabCombat:NewSection("◈ AIMBOT  PROTOCOL")
-local SecPlayerESP   = TabVisuals:NewSection("◈ PLAYER  SCANNER")
-local SecWorldESP    = TabVisuals:NewSection("◈ WORLD   SCANNER")
-local SecVisConfig   = TabVisuals:NewSection("◈ DISPLAY CONFIG")
-local SecUtility     = TabWorld:NewSection("◈ UTILITY  MODULE")
-local SecMovement    = TabWorld:NewSection("◈ MOVEMENT OVERRIDE")
+local SecAimbot      = TabCombat:NewSection("AIMBOT PROTOCOL")
+local SecPlayerESP   = TabVisuals:NewSection("PLAYER SCANNER")
+local SecWorldESP    = TabVisuals:NewSection("WORLD SCANNER")
+local SecVisConfig   = TabVisuals:NewSection("DISPLAY CONFIG")
+local SecUtility     = TabWorld:NewSection("UTILITY MODULE")
+local SecMovement    = TabWorld:NewSection("MOVEMENT OVERRIDE")
 
 -- ============================================================
 -- HELPERS
@@ -429,41 +429,41 @@ end)
 -- ============================================================
 -- UI: [ COMBAT ] TAB
 -- ============================================================
-SecAimbot:NewToggle("► TARGET PLAYERS",      "RMB → Lock onto players",          function(v) Settings.AimPlayers  = v end)
-SecAimbot:NewToggle("► TARGET ANIMALS",      "RMB → Lock onto wildlife",         function(v) Settings.AimAnimals  = v end)
-SecAimbot:NewToggle("► WALL PENETRATION OFF","Only aim at visible targets",       function(v) Settings.WallCheck   = v end)
-SecAimbot:NewToggle("► SILENT FIRE",         "LMB → Smooth silent aim",          function(v) Settings.SilentAim   = v end)
-SecAimbot:NewSlider("► FOV RADIUS",          "Lock-on range (pixels)", 800, 50,  function(v) Settings.FOV         = v end)
-SecAimbot:NewSlider("► SILENT SMOOTHING",    "1=instant  50=butter", 50, 1,      function(v) Settings.SilentAimSmoothing = v / 100 end)
-SecAimbot:NewToggle("► RENDER FOV RING",     "Show targeting perimeter",         function(v) Settings.ShowFOVCircle = v end)
+SecAimbot:NewToggle("Target Players",       "RMB - Lock onto players",          function(v) Settings.AimPlayers  = v end)
+SecAimbot:NewToggle("Target Animals",       "RMB - Lock onto wildlife",         function(v) Settings.AimAnimals  = v end)
+SecAimbot:NewToggle("Wall Check",           "Only aim at visible targets",      function(v) Settings.WallCheck   = v end)
+SecAimbot:NewToggle("Silent Fire",          "LMB - Smooth silent aim",          function(v) Settings.SilentAim   = v end)
+SecAimbot:NewSlider("FOV Radius",           "Lock-on range in pixels", 800, 50, function(v) Settings.FOV         = v end)
+SecAimbot:NewSlider("Silent Smoothing",     "1 = instant  50 = smooth", 50, 1,  function(v) Settings.SilentAimSmoothing = v / 100 end)
+SecAimbot:NewToggle("Show FOV Ring",        "Render targeting circle",          function(v) Settings.ShowFOVCircle = v end)
 
 -- ============================================================
 -- UI: [ VISUALS ] TAB
 -- ============================================================
-SecPlayerESP:NewToggle("► SCAN: USERNAME",   "Render player identity tag",       function(v) Settings.PlayerName = v end)
-SecPlayerESP:NewToggle("► SCAN: HEALTH BAR", "Render HP / MaxHP",               function(v) Settings.PlayerHP   = v end)
-SecPlayerESP:NewToggle("► SCAN: BODY BOX",   "Highlight player silhouette",      function(v) Settings.PlayerBox  = v end)
+SecPlayerESP:NewToggle("Name ESP",          "Show player username tag",         function(v) Settings.PlayerName = v end)
+SecPlayerESP:NewToggle("Health ESP",        "Show HP / Max HP",                 function(v) Settings.PlayerHP   = v end)
+SecPlayerESP:NewToggle("Box ESP",           "Highlight player silhouette",      function(v) Settings.PlayerBox  = v end)
 
-SecWorldESP:NewToggle("► FAUNA TRACKER",     "Detect all wildlife (dead/alive)", function(v)
+SecWorldESP:NewToggle("Animal ESP",         "Track all wildlife dead or alive",  function(v)
     Settings.AnimalESP = v
     if not v then CleanAnimalESP() end
 end)
-SecWorldESP:NewToggle("► DISTANCE OVERLAY",  "Show range to targets",            function(v) Settings.ShowDistance = v end)
+SecWorldESP:NewToggle("Show Distance",      "Display range to targets",         function(v) Settings.ShowDistance = v end)
 
-SecVisConfig:NewSlider("► MAX FAUNA RANGE",  "Fauna ESP max distance", 20000, 500, function(v) Settings.ESPDistance = v end)
-SecVisConfig:NewSlider("► LABEL SIZE",        "Tag font size",         20, 8,      function(v) Settings.TextSize    = v end)
-SecVisConfig:NewColorPicker("► PLAYER TAG COLOR", "Player label tint",  Settings.PlayerColor, function(v) Settings.PlayerColor = v end)
-SecVisConfig:NewColorPicker("► FAUNA TAG COLOR",  "Wildlife label tint",Settings.AnimalColor, function(v) Settings.AnimalColor = v end)
+SecVisConfig:NewSlider("Max Animal Range",  "Fauna ESP max distance", 20000, 500, function(v) Settings.ESPDistance = v end)
+SecVisConfig:NewSlider("Label Size",        "Tag font size",           20, 8,    function(v) Settings.TextSize    = v end)
+SecVisConfig:NewColorPicker("Player Color", "Player label tint",  Settings.PlayerColor, function(v) Settings.PlayerColor = v end)
+SecVisConfig:NewColorPicker("Animal Color", "Wildlife label tint", Settings.AnimalColor, function(v) Settings.AnimalColor = v end)
 
 -- ============================================================
 -- UI: [ WORLD ] TAB
 -- ============================================================
-SecUtility:NewToggle("► FULLBRIGHT OVERRIDE", "Force max light / no fog",         function(v) Settings.FullBright      = v end)
-SecUtility:NewToggle("► INSTANT PROMPT",      "Zero hold duration on interact",   function(v) Settings.InstantInteract = v end)
-SecUtility:NewToggle("► TP-WALK",             "Safe teleport movement hack",      function(v) Settings.TPWalk          = v end)
-SecUtility:NewSlider("► TP SPEED FACTOR",     "TP-Walk multiplier", 15, 1,        function(v) Settings.TPWalkSpeed     = v end)
+SecUtility:NewToggle("Full Bright",         "Force max light, remove fog",      function(v) Settings.FullBright      = v end)
+SecUtility:NewToggle("Instant Interact",    "Zero hold duration on prompts",    function(v) Settings.InstantInteract = v end)
+SecUtility:NewToggle("TP-Walk",             "Safe teleport movement hack",      function(v) Settings.TPWalk          = v end)
+SecUtility:NewSlider("TP Speed",            "TP-Walk multiplier", 15, 1,        function(v) Settings.TPWalkSpeed     = v end)
 
-SecMovement:NewToggle("► NOCLIP",             "Phase through geometry",           function(v)
+SecMovement:NewToggle("Noclip",             "Phase through walls",              function(v)
     Settings.Noclip = v
     if not v then
         local char = LocalPlayer.Character
@@ -474,11 +474,11 @@ SecMovement:NewToggle("► NOCLIP",             "Phase through geometry",       
         end
     end
 end)
-SecMovement:NewToggle("► SPEED OVERRIDE",     "Boost walk speed",                 function(v)
+SecMovement:NewToggle("Speed Boost",        "Override walk speed",              function(v)
     Settings.SpeedBoost = v
     ApplySpeed()
 end)
-SecMovement:NewSlider("► WALK SPEED",         "Speed units (default 16)", 100, 16, function(v)
+SecMovement:NewSlider("Walk Speed",         "Speed value (default 16)", 100, 16, function(v)
     Settings.SpeedValue = v
     ApplySpeed()
 end)
@@ -503,7 +503,7 @@ end)
 -- ============================================================
 task.wait(0.5)
 CyberNotify(
-    "◈ CYBER//WEST  [ ARMED ]",
+    "CYBER//WEST  [ ARMED ]",
     "[ ALL MODULES ONLINE ]  Operator: " .. LocalPlayer.Name,
     6
 )
