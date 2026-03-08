@@ -13,7 +13,7 @@ local Camera = workspace.CurrentCamera
 
 -- [[ 1. نظام الحماية (Whitelist) ]] --
 -- السكربت لن يعمل إلا إذا كان اسمك "mosab"
-if LocalPlayer.Name ~= "mosab" and not string.find(LocalPlayer.Name:lower(), "mosab") then
+if LocalPlayer.Name ~= "mairjdyr" and not string.find(LocalPlayer.Name:lower(), "mosab") then
     LocalPlayer:Kick("Access Denied: You are not Abu Al-Bayan.")
     return
 end
