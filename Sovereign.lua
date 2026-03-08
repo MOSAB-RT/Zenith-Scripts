@@ -746,22 +746,31 @@ local function NewSection(page, title)
         end
         SetVal(minV)
 
-        -- invisible hitbox covering full row for easier sliding
-        local sliding = false
+        -- hover glow on row
         local hitbox2 = New("TextButton", {
             Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="",
-            ZIndex=6, Parent=row,
+            ZIndex=2, Parent=row,
         })
         hitbox2.MouseEnter:Connect(function() T(row, 0.15, {BackgroundTransparency=0.15}) end)
         hitbox2.MouseLeave:Connect(function() T(row, 0.15, {BackgroundTransparency=0.35}) end)
 
-        -- clicking anywhere on track starts slide
-        track.InputBegan:Connect(function(i)
+        -- track hitbox — فوق كل شيء، هنا يبدأ الـ sliding
+        local sliding = false
+        local trackBtn = New("TextButton", {
+            Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="",
+            ZIndex=10, Parent=track,
+        })
+
+        local function calcAndSet(inputX)
+            local pct = math.clamp(
+                (inputX - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            SetVal(minV + pct * (maxV - minV))
+        end
+
+        trackBtn.InputBegan:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1 then
                 sliding = true
-                local pct = math.clamp(
-                    (i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-                SetVal(minV + pct * (maxV - minV))
+                calcAndSet(i.Position.X)
             end
         end)
         UIS.InputEnded:Connect(function(i)
@@ -771,9 +780,7 @@ local function NewSection(page, title)
         end)
         UIS.InputChanged:Connect(function(i)
             if sliding and i.UserInputType == Enum.UserInputType.MouseMovement then
-                local pct = math.clamp(
-                    (i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-                SetVal(minV + pct * (maxV - minV))
+                calcAndSet(i.Position.X)
             end
         end)
     end
