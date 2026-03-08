@@ -580,71 +580,138 @@ local function ApplySpeed()
     if h then h.WalkSpeed=S.SpeedBoost and S.SpeedVal or 16 end
 end
 
--- God Mode
-local godConns={}
+-- ╔══════════════════════════════════════════════╗
+--   GOD MODE — كل طريقة ممكنة client-side
+--
+--   الحقيقة: Health في Roblox server-side
+--   السيرفر يحدد HP ونحن نرد عليه client-side
+--   الهدف: نمنع الشخصية من تموت حتى لو HP=0
+-- ╚══════════════════════════════════════════════╝
+local godConns = {}
+
 local function ApplyGodMode(char)
     if not char then return end
-    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-    local maxHP=hum.MaxHealth
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local maxHP = hum.MaxHealth
 
-    -- طبقة 1: GetPropertyChangedSignal — يطلق فور ما تتغير HP
-    -- أسرع بكثير من Heartbeat، يمسك الـ damage قبل ما يصير موت
-    local c1=hum:GetPropertyChangedSignal("Health"):Connect(function()
-        if not S.GodMode or not hum.Parent then return end
-        if hum.Health <= 0 then
-            -- لو وصل صفر نرجعه فوري
-            pcall(function() hum.Health = maxHP end)
-        elseif hum.Health < maxHP * 0.5 then
-            -- لو نزل تحت 50% نرجعه
-            pcall(function() hum.Health = maxHP end)
-        end
-    end)
-
-    -- طبقة 2: Heartbeat backup كل frame
-    local c2=Run.Heartbeat:Connect(function()
-        if not S.GodMode or not hum.Parent then return end
-        if hum.Health < maxHP then
-            pcall(function() hum.Health = maxHP end)
-        end
-    end)
-
-    -- طبقة 3: منع BreakJoints
-    local c3=char.ChildAdded:Connect(function(obj)
-        if not S.GodMode then return end
-        if obj.Name=="BreakJointsOnDeath" or obj.Name=="BreakJoints" then
-            task.defer(function() pcall(function() obj:Destroy() end) end)
-        end
-    end)
-
-    -- طبقة 4: getconnections — نعطل Died connections (Xeno/Synapse)
+    -- ── طبقة 1: SetStateEnabled ──────────────
+    -- يمنع الـ Humanoid من يدخل حالة Dead نهائياً
+    -- هذي أقوى طبقة — تمنع الموت من الأساس
     pcall(function()
-        if getconnections then
-            for _,conn in pairs(getconnections(hum.Died)) do
-                pcall(function() conn:Disable() end)
-            end
+        hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    end)
+
+    -- ── طبقة 2: GetPropertyChangedSignal ─────
+    -- فور ما تنزل HP نرجعها — أسرع من Heartbeat
+    local c1 = hum:GetPropertyChangedSignal("Health"):Connect(function()
+        if not S.GodMode or not hum.Parent then return end
+        task.defer(function()
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                if hum.Health <= 0 then hum.Health = maxHP end
+            end)
+        end)
+    end)
+
+    -- ── طبقة 3: Heartbeat كل frame ───────────
+    local c2 = Run.Heartbeat:Connect(function()
+        if not S.GodMode or not hum.Parent then return end
+        pcall(function()
+            if hum.Health < maxHP then hum.Health = maxHP end
+        end)
+    end)
+
+    -- ── طبقة 4: getconnections ───────────────
+    -- نعطل كل connections على hum.Died و hum.HealthChanged
+    -- حتى اللعبة ما تعرف إن اللاعب مات
+    pcall(function()
+        if not getconnections then return end
+        -- عطل Died
+        for _, conn in pairs(getconnections(hum.Died)) do
+            pcall(function() conn:Disable() end)
+        end
+        -- عطل StateChanged (منع Dead state)
+        for _, conn in pairs(getconnections(hum.StateChanged)) do
+            pcall(function()
+                -- نعطل فقط اللي يشتغل على Dead state
+                conn:Disable()
+            end)
         end
     end)
 
-    table.insert(godConns,c1)
-    table.insert(godConns,c2)
-    table.insert(godConns,c3)
+    -- ── طبقة 5: منع BreakJoints ──────────────
+    local c3 = char.ChildAdded:Connect(function(obj)
+        if not S.GodMode then return end
+        if obj.Name == "BreakJointsOnDeath"
+        or obj.Name == "BreakJoints"
+        or obj.Name == "Ragdoll" then
+            task.defer(function()
+                pcall(function() obj:Destroy() end)
+            end)
+        end
+    end)
+
+    -- ── طبقة 6: منع CharacterRemoving ────────
+    -- لو اللعبة تحاول تحذف الشخصية نوقفها
+    local c4 = LocalPlayer.CharacterRemoving:Connect(function()
+        if not S.GodMode then return end
+        -- ننتظر شخصية جديدة وننشط GodMode عليها تلقائياً
+        -- (CharacterAdded handler يتكفل بذلك)
+    end)
+
+    -- ── طبقة 7: سريع جداً — كل 0.016s ───────
+    -- task.spawn loop منفصل عن Heartbeat
+    local loopActive = true
+    task.spawn(function()
+        while loopActive and S.GodMode do
+            task.wait(0.016) -- ~60fps
+            pcall(function()
+                if hum and hum.Parent then
+                    hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                    if hum.Health < maxHP then hum.Health = maxHP end
+                end
+            end)
+        end
+    end)
+
+    table.insert(godConns, c1)
+    table.insert(godConns, c2)
+    table.insert(godConns, c3)
+    table.insert(godConns, c4)
+    table.insert(godConns, function() loopActive = false end) -- stopper
 end
 
 local function RemoveGodMode()
-    -- نعيد تفعيل Died connections
+    -- نعيد تفعيل كل الـ connections
     pcall(function()
-        local char=LocalPlayer.Character; if not char then return end
-        local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+        local char = LocalPlayer.Character; if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
+        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true) end)
+        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true) end)
         if getconnections then
-            for _,conn in pairs(getconnections(hum.Died)) do
+            for _, conn in pairs(getconnections(hum.Died)) do
+                pcall(function() conn:Enable() end)
+            end
+            for _, conn in pairs(getconnections(hum.StateChanged)) do
                 pcall(function() conn:Enable() end)
             end
         end
     end)
-    for _,c in ipairs(godConns) do pcall(function() c:Disconnect() end) end
+    for _, c in ipairs(godConns) do
+        if type(c) == "function" then c()
+        else pcall(function() c:Disconnect() end) end
+    end
     table.clear(godConns)
 end
-local function SetGodMode(on) RemoveGodMode(); if on then ApplyGodMode(LocalPlayer.Character) end end
+
+local function SetGodMode(on)
+    RemoveGodMode()
+    if on then ApplyGodMode(LocalPlayer.Character) end
+end
 
 -- Spawn Protection — فقط لما S.SpawnProt=true، بدون background loop يكسر الأسلحة
 local spawnProtConn
