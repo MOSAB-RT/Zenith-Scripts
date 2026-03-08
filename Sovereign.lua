@@ -431,8 +431,109 @@ local function NewSection(page, title)
         end)
     end
 
-    return { NewToggle=NewToggle, NewSlider=NewSlider }
-end
+    -- ── ColorPicker ──
+    local function NewColorPicker(label, desc, defaultColor, cb)
+        local row = Make("Frame", {
+            Size=UDim2.new(1,0,0,44), BackgroundColor3=C.BG2,
+            BorderSizePixel=0, LayoutOrder=nextOrder(), Parent=sec,
+        })
+        Corner(row,4); Stroke(row,C.Border)
+
+        Make("TextLabel", {
+            Size=UDim2.new(1,-80,0,20), Position=UDim2.new(0,12,0,5),
+            BackgroundTransparency=1, Text=label,
+            TextColor3=C.White, TextSize=13, Font=Enum.Font.GothamBold,
+            TextXAlignment=Enum.TextXAlignment.Left,
+        }, row)
+        Make("TextLabel", {
+            Size=UDim2.new(1,-80,0,16), Position=UDim2.new(0,12,0,25),
+            BackgroundTransparency=1, Text=desc,
+            TextColor3=C.Gray, TextSize=10, Font=Enum.Font.Gotham,
+            TextXAlignment=Enum.TextXAlignment.Left,
+        }, row)
+
+        -- color swatch preview
+        local swatch = Make("Frame", {
+            Size=UDim2.new(0,36,0,28), Position=UDim2.new(1,-48,0.5,-14),
+            BackgroundColor3=defaultColor, BorderSizePixel=0,
+        }, row)
+        Corner(swatch,5)
+        Stroke(swatch, C.Border, 1)
+
+        -- current color state (RGB 0-255)
+        local currentColor = defaultColor
+        local r = math.floor(defaultColor.R*255)
+        local g = math.floor(defaultColor.G*255)
+        local b = math.floor(defaultColor.B*255)
+
+        -- picker popup
+        local popup = Make("Frame", {
+            Size=UDim2.new(0,220,0,130), Position=UDim2.new(1,-230,1,4),
+            BackgroundColor3=C.Panel, BorderSizePixel=0, Visible=false, ZIndex=10,
+        }, row)
+        Corner(popup,6); Stroke(popup,C.Red,1.5)
+        Make("UIPadding",{PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),PaddingTop=UDim.new(0,8),PaddingBottom=UDim.new(0,8)},popup)
+
+        local function updateColor()
+            currentColor = Color3.fromRGB(r,g,b)
+            swatch.BackgroundColor3 = currentColor
+            cb(currentColor)
+        end
+
+        local channels = {
+            {name="R", getter=function() return r end, setter=function(v) r=v end, color=Color3.fromRGB(220,60,60)},
+            {name="G", getter=function() return g end, setter=function(v) g=v end, color=Color3.fromRGB(60,200,80)},
+            {name="B", getter=function() return b end, setter=function(v) b=v end, color=Color3.fromRGB(60,120,220)},
+        }
+
+        for idx, ch in ipairs(channels) do
+            local yOff = (idx-1)*36 + 4
+            Make("TextLabel",{
+                Size=UDim2.new(0,14,0,14), Position=UDim2.new(0,0,0,yOff+8),
+                BackgroundTransparency=1, Text=ch.name,
+                TextColor3=ch.color, TextSize=11, Font=Enum.Font.GothamBold,
+                ZIndex=11, Parent=popup,
+            })
+            local valBox = Make("TextLabel",{
+                Size=UDim2.new(0,30,0,14), Position=UDim2.new(1,-30,0,yOff+8),
+                BackgroundTransparency=1, Text=tostring(ch.getter()),
+                TextColor3=C.White, TextSize=10, Font=Enum.Font.GothamBold,
+                TextXAlignment=Enum.TextXAlignment.Right, ZIndex=11, Parent=popup,
+            })
+            local tr = Make("Frame",{
+                Size=UDim2.new(1,-48,0,12), Position=UDim2.new(0,18,0,yOff+10),
+                BackgroundColor3=C.RedDark, BorderSizePixel=0, ZIndex=11, Parent=popup,
+            })
+            Corner(tr,6)
+            local fi = Make("Frame",{
+                Size=UDim2.new(ch.getter()/255,0,1,0), BackgroundColor3=ch.color,
+                BorderSizePixel=0, ZIndex=12, Parent=tr,
+            })
+            Corner(fi,6)
+
+            local sl2 = false
+            tr.InputBegan:Connect(function(i)
+                if i.UserInputType==Enum.UserInputType.MouseButton1 then
+                    sl2=true
+                    local pct=math.clamp((i.Position.X-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
+                    local v=math.floor(pct*255); ch.setter(v); fi.Size=UDim2.new(pct,0,1,0); valBox.Text=tostring(v); updateColor()
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sl2=false end end)
+            UserInputService.InputChanged:Connect(function(i)
+                if sl2 and i.UserInputType==Enum.UserInputType.MouseMovement then
+                    local pct=math.clamp((i.Position.X-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
+                    local v=math.floor(pct*255); ch.setter(v); fi.Size=UDim2.new(pct,0,1,0); valBox.Text=tostring(v); updateColor()
+                end
+            end)
+        end
+
+        -- toggle popup on swatch click
+        local swBtn = Make("TextButton",{
+            Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="", ZIndex=5, Parent=swatch,
+        })
+        swBtn.MouseButton1Click:Connect(function() popup.Visible = not popup.Visible end)
+    end
 
 -- ============================================================
 -- BUILD TABS
@@ -674,6 +775,9 @@ SecWorldESP.NewToggle("Show Distance",  "Display range to target",          func
 
 SecVisConfig.NewSlider("Max Animal Range","Fauna ESP distance", 20000, 500, function(v) Settings.ESPDistance=v end)
 SecVisConfig.NewSlider("Label Size",      "ESP font size",      20,    8,   function(v) Settings.TextSize=v end)
+SecVisConfig.NewColorPicker("Player ESP Color", "Color for player tags",   Settings.PlayerColor, function(v) Settings.PlayerColor=v end)
+SecVisConfig.NewColorPicker("Animal ESP Color", "Color for animal tags",   Settings.AnimalColor, function(v) Settings.AnimalColor=v end)
+SecVisConfig.NewColorPicker("FOV Ring Color",   "Color of the FOV circle", FOVCircle.Color,      function(v) FOVCircle.Color=v end)
 
 SecUtility.NewToggle("Full Bright",     "Force max light, remove fog",      function(v) Settings.FullBright=v end)
 SecUtility.NewToggle("Instant Interact","Zero hold duration on prompts",    function(v) Settings.InstantInteract=v end)
