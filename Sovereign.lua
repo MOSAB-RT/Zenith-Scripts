@@ -26,7 +26,7 @@ local S = {
     AnimalColor=Color3.fromRGB(255,200,0),
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
-    GodMode=false, SpawnProt=false,
+    GodMod=false,
 }
 
 local FOVC = Drawing.new("Circle")
@@ -581,162 +581,55 @@ local function ApplySpeed()
 end
 
 -- ╔══════════════════════════════════════════════╗
---   GOD MODE — كل طريقة ممكنة client-side
+--   GODMOD — يحافظ على الدرع الأزرق للأبد
 --
---   الحقيقة: Health في Roblox server-side
---   السيرفر يحدد HP ونحن نرد عليه client-side
---   الهدف: نمنع الشخصية من تموت حتى لو HP=0
+--   الدرع ينتهي فقط لو سحبت سلاح
+--   الحل: نمنع أي سلاح يتجهز — الدرع يبقى إلى الأبد
 -- ╚══════════════════════════════════════════════╝
-local godConns = {}
+local godModConn   = nil  -- ChildAdded للـ character
+local godModReconn = nil  -- CharacterAdded إعادة تطبيق
 
-local function ApplyGodMode(char)
+local function ApplyGodMod(char)
+    if godModConn then godModConn:Disconnect(); godModConn=nil end
     if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local maxHP = hum.MaxHealth
+    local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
 
-    -- ── طبقة 1: SetStateEnabled ──────────────
-    -- يمنع الـ Humanoid من يدخل حالة Dead نهائياً
-    -- هذي أقوى طبقة — تمنع الموت من الأساس
-    pcall(function()
-        hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-    end)
-
-    -- ── طبقة 2: GetPropertyChangedSignal ─────
-    -- فور ما تنزل HP نرجعها — أسرع من Heartbeat
-    local c1 = hum:GetPropertyChangedSignal("Health"):Connect(function()
-        if not S.GodMode or not hum.Parent then return end
-        task.defer(function()
-            pcall(function()
-                hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-                if hum.Health <= 0 then hum.Health = maxHP end
-            end)
-        end)
-    end)
-
-    -- ── طبقة 3: Heartbeat كل frame ───────────
-    local c2 = Run.Heartbeat:Connect(function()
-        if not S.GodMode or not hum.Parent then return end
-        pcall(function()
-            if hum.Health < maxHP then hum.Health = maxHP end
-        end)
-    end)
-
-    -- ── طبقة 4: getconnections ───────────────
-    -- نعطل كل connections على hum.Died و hum.HealthChanged
-    -- حتى اللعبة ما تعرف إن اللاعب مات
-    pcall(function()
-        if not getconnections then return end
-        -- عطل Died
-        for _, conn in pairs(getconnections(hum.Died)) do
-            pcall(function() conn:Disable() end)
-        end
-        -- عطل StateChanged (منع Dead state)
-        for _, conn in pairs(getconnections(hum.StateChanged)) do
-            pcall(function()
-                -- نعطل فقط اللي يشتغل على Dead state
-                conn:Disable()
-            end)
-        end
-    end)
-
-    -- ── طبقة 5: منع BreakJoints ──────────────
-    local c3 = char.ChildAdded:Connect(function(obj)
-        if not S.GodMode then return end
-        if obj.Name == "BreakJointsOnDeath"
-        or obj.Name == "BreakJoints"
-        or obj.Name == "Ragdoll" then
+    -- لما أي Tool يدخل الشخصية، نرجعه للـ Backpack فوراً
+    -- هذا يمنع الدرع من ينتهي لأنه ما في سلاح يتجهز أبداً
+    godModConn = char.ChildAdded:Connect(function(obj)
+        if not S.GodMod then return end
+        if obj:IsA("Tool") then
             task.defer(function()
-                pcall(function() obj:Destroy() end)
-            end)
-        end
-    end)
-
-    -- ── طبقة 6: منع CharacterRemoving ────────
-    -- لو اللعبة تحاول تحذف الشخصية نوقفها
-    local c4 = LocalPlayer.CharacterRemoving:Connect(function()
-        if not S.GodMode then return end
-        -- ننتظر شخصية جديدة وننشط GodMode عليها تلقائياً
-        -- (CharacterAdded handler يتكفل بذلك)
-    end)
-
-    -- ── طبقة 7: سريع جداً — كل 0.016s ───────
-    -- task.spawn loop منفصل عن Heartbeat
-    local loopActive = true
-    task.spawn(function()
-        while loopActive and S.GodMode do
-            task.wait(0.016) -- ~60fps
-            pcall(function()
-                if hum and hum.Parent then
-                    hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-                    if hum.Health < maxHP then hum.Health = maxHP end
+                -- نتأكد السلاح لسا في الشخصية
+                if obj.Parent == char then
+                    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+                    if backpack then obj.Parent = backpack end
                 end
             end)
         end
     end)
 
-    table.insert(godConns, c1)
-    table.insert(godConns, c2)
-    table.insert(godConns, c3)
-    table.insert(godConns, c4)
-    table.insert(godConns, function() loopActive = false end) -- stopper
-end
-
-local function RemoveGodMode()
-    -- نعيد تفعيل كل الـ connections
-    pcall(function()
-        local char = LocalPlayer.Character; if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end)
-        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true) end)
-        pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true) end)
-        if getconnections then
-            for _, conn in pairs(getconnections(hum.Died)) do
-                pcall(function() conn:Enable() end)
-            end
-            for _, conn in pairs(getconnections(hum.StateChanged)) do
-                pcall(function() conn:Enable() end)
-            end
+    -- أي سلاح موجود حالياً نرجعه فوراً
+    for _, obj in ipairs(char:GetChildren()) do
+        if obj:IsA("Tool") then
+            local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+            if backpack then obj.Parent = backpack end
         end
-    end)
-    for _, c in ipairs(godConns) do
-        if type(c) == "function" then c()
-        else pcall(function() c:Disconnect() end) end
     end
-    table.clear(godConns)
 end
 
-local function SetGodMode(on)
-    RemoveGodMode()
-    if on then ApplyGodMode(LocalPlayer.Character) end
+local function RemoveGodMod()
+    if godModConn then godModConn:Disconnect(); godModConn=nil end
 end
 
--- Spawn Protection — فقط لما S.SpawnProt=true، بدون background loop يكسر الأسلحة
-local spawnProtConn
-local function EnableSpawnProt(char)
-    if spawnProtConn then spawnProtConn:Disconnect(); spawnProtConn=nil end
-    if not char then return end
-    local active=true
-    task.delay(32,function() active=false end)
-    -- نراقب ChildAdded فقط — بدون loop مستمر
-    spawnProtConn=char.ChildAdded:Connect(function(obj)
-        if not active or not S.SpawnProt or not obj:IsA("Tool") then return end
-        task.defer(function()
-            local bp=LocalPlayer:FindFirstChildOfClass("Backpack")
-            if bp and obj and obj.Parent==char then obj.Parent=bp end
-        end)
-    end)
-end
-local function DisableSpawnProt()
-    if spawnProtConn then spawnProtConn:Disconnect(); spawnProtConn=nil end
+local function SetGodMod(on)
+    RemoveGodMod()
+    if on then ApplyGodMod(LocalPlayer.Character) end
 end
 
 LocalPlayer.CharacterAdded:Connect(function(c)
-    table.clear(godConns); task.wait(0.3)
-    if S.GodMode    then ApplyGodMode(c) end
-    if S.SpawnProt  then EnableSpawnProt(c) end
+    task.wait(0.5) -- انتظر الشخصية تحمل والدرع يظهر
+    if S.GodMod     then ApplyGodMod(c) end
     if S.SpeedBoost then local h=c:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=S.SpeedVal end end
     if S.Noclip     then task.wait(0.1); SetNoclip(true) end
 end)
@@ -794,11 +687,7 @@ SU.NewToggle("Instant Interact", "Zero hold on prompts",          function(v) S.
 SU.NewToggle("TP-Walk",          "Teleport movement hack",        function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1, function(v) S.TPSpeed=v end)
 
-SM.NewToggle("God Mode",      "HP restored every frame",       function(v) S.GodMode=v; SetGodMode(v) end)
-SM.NewToggle("Spawn Protect", "Block weapons for 30s on spawn", function(v)
-    S.SpawnProt=v
-    if v then EnableSpawnProt(LocalPlayer.Character) else DisableSpawnProt() end
-end)
+SM.NewToggle("GodMod", "Keeps spawn shield active forever", function(v) S.GodMod=v; SetGodMod(v) end)
 SM.NewToggle("Noclip",        "Phase through walls",           function(v) S.Noclip=v; SetNoclip(v) end)
 SM.NewToggle("Speed Boost",   "Override walk speed",           function(v) S.SpeedBoost=v; ApplySpeed() end)
 SM.NewSlider("Walk Speed",    "Speed value (default 16)",100,16,function(v) S.SpeedVal=v; ApplySpeed() end)
