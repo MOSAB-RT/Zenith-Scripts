@@ -29,7 +29,7 @@ local S = {
     AnimalColor=Color3.fromRGB(255,200,0),
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
-    GodMode=false, SpawnProt=false, WantedProtect=false,
+    GodMode=false, SpawnProt=false,
 }
 
 -- ── FOV CIRCLE ────────────────────────────────────────────
@@ -205,7 +205,7 @@ local XBtn = New("TextButton", {
     Size             = UDim2.new(0, 30, 0, 30),
     Position         = UDim2.new(1, -40, 0.5, -15),
     BackgroundColor3 = C.NeonDark,
-    Text             = "✕",
+    Text             = "X",
     TextColor3       = C.White,
     TextSize         = 14,
     Font             = Enum.Font.GothamBold,
@@ -336,7 +336,8 @@ local Scroll = New("ScrollingFrame", {
     Position              = UDim2.new(0, 12, 0, 144),
     BackgroundTransparency= 1,
     BorderSizePixel       = 0,
-    ScrollBarThickness    = 0,
+    ScrollBarThickness    = 3,
+    ScrollBarImageColor3  = Color3.fromRGB(180,30,30),
     CanvasSize            = UDim2.new(0, 0, 0, 0),
     AutomaticCanvasSize   = Enum.AutomaticSize.Y,
     ClipsDescendants      = true,
@@ -378,7 +379,7 @@ local cpClose = New("TextButton", {
     Size             = UDim2.new(0, 24, 0, 24),
     Position         = UDim2.new(1, -24, 0, -2),
     BackgroundColor3 = C.NeonDark,
-    Text             = "✕",
+    Text             = "X",
     TextColor3       = C.White,
     TextSize         = 11,
     Font             = Enum.Font.GothamBold,
@@ -590,7 +591,7 @@ local function NewSection(page, title)
         Size                  = UDim2.new(1, -12, 1, 0),
         Position              = UDim2.new(0, 12, 0, 0),
         BackgroundTransparency= 1,
-        Text                  = "  " .. title,
+        Text                  = title,
         TextColor3            = C.NeonGlow,
         TextSize              = 11,
         Font                  = Enum.Font.GothamBold,
@@ -816,9 +817,9 @@ end -- END NewSection
 -- ╔══════════════════════════════════════════════════════════╗
 --   BUILD TABS & SECTIONS
 -- ╚══════════════════════════════════════════════════════════╝
-local PC = NewTab("COMBAT",  "⚔")
-local PV = NewTab("VISUALS", "👁")
-local PW = NewTab("WORLD",   "⚡")
+local PC = NewTab("COMBAT",  nil)
+local PV = NewTab("VISUALS", nil)
+local PW = NewTab("WORLD",   nil)
 SwitchTab("COMBAT")
 
 local SA  = NewSection(PC, "AIMBOT PROTOCOL")
@@ -1150,26 +1151,6 @@ LocalPlayer.CharacterAdded:Connect(function(c)
 end)
 
 -- ── WANTED PROTECT ────────────────────────────────────────
-local wantedHook
-
-local function SetWantedProtect(on)
-    if wantedHook then wantedHook:Disconnect(); wantedHook = nil end
-    if not on then return end
-    wantedHook = Run.Heartbeat:Connect(function()
-        if not S.WantedProtect then return end
-        local function clear(parent)
-            if not parent then return end
-            for _, v in ipairs(parent:GetDescendants()) do
-                if (v.Name:lower():find("wanted") or v.Name:lower():find("bounty"))
-                    and (v:IsA("NumberValue") or v:IsA("IntValue")) then
-                    if v.Value > 0 then pcall(function() v.Value = 0 end) end
-                end
-            end
-        end
-        clear(LocalPlayer)
-        if LocalPlayer.Character then clear(LocalPlayer.Character) end
-    end)
-end
 
 -- ── RENDER LOOP (lightweight) ─────────────────────────────
 Run.RenderStepped:Connect(function()
@@ -1224,7 +1205,6 @@ SVC.NewColorPicker("FOV Ring Color",   "Color of the aim circle", FOVC.Color,   
 
 SU.NewToggle("Full Bright",      "Force max lighting",            function(v) S.FullBright=v end)
 SU.NewToggle("Instant Interact", "Zero hold duration on prompts", function(v) S.Interact=v end)
-SU.NewToggle("Wanted Protect",   "Prevent wanted level rising",   function(v) S.WantedProtect=v; SetWantedProtect(v) end)
 SU.NewToggle("TP-Walk",          "Safe teleport movement hack",   function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier", 15, 1, function(v) S.TPSpeed=v end)
 
