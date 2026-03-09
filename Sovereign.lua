@@ -25,7 +25,7 @@ local S = {
     AnimalESP=false, ShowDist=false, ESPDist=10000, TextSize=12,
     PlayerColor=Color3.fromRGB(0,200,255),
     AnimalColor=Color3.fromRGB(255,200,0),
-    Tracers=false, TracerDot=true,
+    Tracers=false, TracerDot=true, BoxSize=1,
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
 }
@@ -232,9 +232,47 @@ local XBtn=New("TextButton",{
 Corner(XBtn,6); Outline(XBtn,C.NeonBr,1,0.4)
 XBtn.MouseEnter:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.Neon}) end)
 XBtn.MouseLeave:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.NeonDk}) end)
+-- ── FULL CLEANUP (X button) ──────────────────
+local function FullCleanup()
+    -- tracers
+    for _,t in pairs(tracerPool) do
+        pcall(function() t.line:Remove() end)
+        pcall(function() t.dot:Remove()  end)
+    end
+    -- FOV circle
+    pcall(function() FOVC:Remove() end)
+    -- all ESP billboards + highlights on all players
+    for _,p in ipairs(Players:GetPlayers()) do
+        local c=p.Character; if not c then continue end
+        for _,tag in ipairs({"GWPLYR","GWPH","GWHP"}) do
+            local obj=c:FindFirstChild(tag,true); if obj then pcall(function() obj:Destroy() end) end
+        end
+    end
+    -- animal ESP
+    for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
+        local f=workspace:FindFirstChild(fn); if not f then continue end
+        for _,a in ipairs(f:GetChildren()) do
+            local rp=GetRoot(a); if not rp then continue end
+            local t=rp:FindFirstChild("GWANIM"); if t then pcall(function() t:Destroy() end) end
+        end
+    end
+    -- restore lighting
+    pcall(function()
+        Light.ClockTime=6; Light.Brightness=1; Light.GlobalShadows=true
+    end)
+    -- restore noclip / speed
+    pcall(function()
+        local c=LocalPlayer.Character; if not c then return end
+        for _,p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=true end end
+        local h=c:FindFirstChildOfClass("Humanoid"); if h then h.WalkSpeed=16 end
+    end)
+    -- destroy GUI last
+    pcall(function() Gui:Destroy() end)
+end
+
 XBtn.MouseButton1Click:Connect(function()
     Pulse(XBtn)
-    task.delay(0.12,function() Gui:Destroy() end)
+    task.delay(0.15, FullCleanup)
 end)
 
 -- Drag
@@ -664,7 +702,7 @@ local function GetTarget()
     return tp
 end
 
-local function ManageESP(char,text,color,tag,show,dist,isP)
+local function ManageESP(char,text,color,tag,show,dist,isP,hum)
     local rp=isP and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")) or GetRoot(char)
     if not rp then return end
     local inRange=isP or (dist<=S.ESPDist)
@@ -672,16 +710,58 @@ local function ManageESP(char,text,color,tag,show,dist,isP)
     if show and inRange then
         if not bb then
             bb=Instance.new("BillboardGui"); bb.Name=tag; bb.Adornee=rp
-            bb.AlwaysOnTop=true; bb.Size=UDim2.new(0,200,0,60)
-            bb.StudsOffset=Vector3.new(0,3,0); bb.Parent=rp
+            bb.AlwaysOnTop=true; bb.Size=UDim2.new(0,200,0,50)
+            bb.StudsOffset=Vector3.new(0,3.2,0); bb.Parent=rp
             local lb=Instance.new("TextLabel",bb); lb.Name="L"
-            lb.BackgroundTransparency=1; lb.Size=UDim2.new(1,0,1,0)
+            lb.BackgroundTransparency=1; lb.Size=UDim2.new(1,0,0.55,0)
             lb.TextStrokeTransparency=0.3; lb.TextStrokeColor3=Color3.new(0,0,0)
-            lb.Font=Enum.Font.Code
+            lb.Font=Enum.Font.Code; lb.TextYAlignment=Enum.TextYAlignment.Bottom
         end
         local lb=bb:FindFirstChild("L")
         if lb then lb.TextSize=S.TextSize; lb.TextColor3=color; lb.Text=text..(S.ShowDist and ("  ["..dist.."m]") or "") end
-    else if bb then bb:Destroy() end end
+
+        -- ── HEALTH BAR ──
+        if isP and hum and S.PlayerHP then
+            local hbGui=rp:FindFirstChild("GWHP")
+            if not hbGui then
+                hbGui=Instance.new("BillboardGui"); hbGui.Name="GWHP"; hbGui.Adornee=rp
+                hbGui.AlwaysOnTop=true; hbGui.Size=UDim2.new(0,54,0,10)
+                hbGui.StudsOffset=Vector3.new(0,1.6,0); hbGui.Parent=rp
+                -- bg
+                local bg=Instance.new("Frame",hbGui); bg.Name="BG"
+                bg.Size=UDim2.new(1,0,1,0); bg.BackgroundColor3=Color3.fromRGB(20,20,20)
+                bg.BackgroundTransparency=0.3; bg.BorderSizePixel=0
+                Instance.new("UICorner",bg).CornerRadius=UDim.new(0,3)
+                -- fill
+                local fill=Instance.new("Frame",bg); fill.Name="F"
+                fill.Size=UDim2.new(1,0,1,0); fill.BorderSizePixel=0
+                Instance.new("UICorner",fill).CornerRadius=UDim.new(0,3)
+                -- hp number
+                local num=Instance.new("TextLabel",hbGui); num.Name="N"
+                num.Size=UDim2.new(1,0,0,10); num.Position=UDim2.new(0,0,1,2)
+                num.BackgroundTransparency=1; num.Font=Enum.Font.GothamBold
+                num.TextSize=9; num.TextStrokeTransparency=0.2
+                num.TextStrokeColor3=Color3.new(0,0,0)
+            end
+            local pct=math.clamp(hum.Health/hum.MaxHealth,0,1)
+            local fill=hbGui:FindFirstChild("BG") and hbGui.BG:FindFirstChild("F")
+            local num=hbGui:FindFirstChild("N")
+            if fill then
+                local r=math.floor(255*(1-pct)); local g=math.floor(220*pct)
+                local hpCol=Color3.fromRGB(r,g,40)
+                fill.Size=UDim2.new(pct,0,1,0); fill.BackgroundColor3=hpCol
+            end
+            if num then
+                num.Text=math.floor(hum.Health).."/"..math.floor(hum.MaxHealth)
+                num.TextColor3=color
+            end
+        else
+            local old=rp:FindFirstChild("GWHP"); if old and not (isP and S.PlayerHP) then old:Destroy() end
+        end
+    else
+        if bb then bb:Destroy() end
+        local hbGui=rp:FindFirstChild("GWHP"); if hbGui then hbGui:Destroy() end
+    end
 end
 local function CleanAESP()
     for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
@@ -716,16 +796,17 @@ task.spawn(function() while true do task.wait(0.15)
         if rp and hum and hum.Health>0 then
             local dist=GetDist(rp.Position); local show=S.PlayerName or S.PlayerHP; local txt=""
             if S.PlayerName then txt="[ "..p.Name.." ]" end
-            if S.PlayerHP then txt=txt..(txt~="" and "\n" or "").."HP "..math.floor(hum.Health).."/"..math.floor(hum.MaxHealth) end
-            ManageESP(c,txt,S.PlayerColor,"GWPLYR",show,dist,true)
+            ManageESP(c,txt,S.PlayerColor,"GWPLYR",show,dist,true,hum)
             local hl=c:FindFirstChild("GWPH")
             if S.PlayerBox then
                 if not hl then hl=Instance.new("Highlight"); hl.Name="GWPH"; hl.Parent=c end
-                hl.FillColor=S.PlayerColor; hl.FillTransparency=0.65; hl.OutlineColor=C.Neon; hl.OutlineTransparency=0
+                hl.FillColor=S.PlayerColor; hl.FillTransparency=math.clamp(1-S.BoxSize*0.35,0.4,0.9)
+                hl.OutlineColor=C.Neon; hl.OutlineTransparency=0
             elseif hl then hl:Destroy() end
         else
             local b=c:FindFirstChild("GWPLYR",true); if b then b:Destroy() end
             local hl=c:FindFirstChild("GWPH"); if hl then hl:Destroy() end
+            local hb=c:FindFirstChild("GWHP",true); if hb then hb:Destroy() end
         end
         end) -- pcall end
         if not ok then end
@@ -767,13 +848,13 @@ local function GetOrMakeTracer(p)
         line.Transparency = 0.15
         line.Visible   = false
 
-        local dot = Drawing.new("Circle")
-        dot.Radius  = 5
-        dot.Filled  = true
-        dot.Color   = S.PlayerColor
+        local dot = Drawing.new("Square")
+        dot.Size      = Vector2.new(10, 10)
+        dot.Filled    = true
+        dot.Color     = S.PlayerColor
         dot.Transparency = 0
         dot.Thickness = 1
-        dot.Visible = false
+        dot.Visible   = false
 
         tracerPool[p] = {line=line, dot=dot}
     end
@@ -804,11 +885,12 @@ Run.RenderStepped:Connect(function()
                 td.line.To      = sp
                 td.line.Color   = S.PlayerColor
                 td.line.Visible = true
-                -- head dot
+                -- head dot (Square centered on head)
                 if S.TracerDot then
-                    td.dot.Position    = sp
-                    td.dot.Color       = S.PlayerColor
-                    td.dot.Visible     = true
+                    td.dot.Position = Vector2.new(pos3.X - 5, pos3.Y - 5)
+                    td.dot.Size     = Vector2.new(10, 10)
+                    td.dot.Color    = S.PlayerColor
+                    td.dot.Visible  = true
                 else
                     td.dot.Visible = false
                 end
@@ -816,6 +898,21 @@ Run.RenderStepped:Connect(function()
                 td.line.Visible = false
                 td.dot.Visible  = false
             end
+        elseif S.TracerDot and not S.Tracers then
+            -- dot only mode (no tracer line)
+            td.line.Visible = false
+            local ch2 = pl.Character
+            local head2 = ch2 and ch2:FindFirstChild("Head")
+            local hum2  = ch2 and ch2:FindFirstChildOfClass("Humanoid")
+            if head2 and hum2 and hum2.Health > 0 then
+                local pos3, onScreen = Cam:WorldToViewportPoint(head2.Position)
+                if onScreen then
+                    td.dot.Position = Vector2.new(pos3.X - 5, pos3.Y - 5)
+                    td.dot.Size     = Vector2.new(10, 10)
+                    td.dot.Color    = S.PlayerColor
+                    td.dot.Visible  = true
+                else td.dot.Visible = false end
+            else td.dot.Visible = false end
         else
             td.line.Visible = false
             td.dot.Visible  = false
@@ -855,10 +952,11 @@ SA.NewSlider("Silent Smoothing", "1=instant  50=smooth",  50,  1,   function(v) 
 SA.NewToggle("Show FOV Ring",    "Render FOV circle on screen",      function(v) S.ShowFOV=v end)
 
 SPE.NewToggle("Name ESP",   "Show player username",        function(v) S.PlayerName=v end)
-SPE.NewToggle("Health ESP", "Show HP / Max HP",            function(v) S.PlayerHP=v end)
+SPE.NewToggle("Health ESP", "HP bar + number above head",  function(v) S.PlayerHP=v end)
 SPE.NewToggle("Box ESP",    "Highlight player silhouette", function(v) S.PlayerBox=v end)
-SPE.NewToggle("Tracers",    "Draw lines from screen to players", function(v) S.Tracers=v; if not v then CleanTracers() end end)
-SPE.NewToggle("Tracer Dot", "Show dot on player head",    function(v) S.TracerDot=v end)
+SPE.NewSlider("Box Opacity","Fill density of the box",5,1, function(v) S.BoxSize=v end)
+SPE.NewToggle("Tracers",    "Lines from screen bottom to players", function(v) S.Tracers=v; if not v then CleanTracers() end end)
+SPE.NewToggle("Tracer Dot", "Dot on player head (works alone)", function(v) S.TracerDot=v end)
 
 SWE.NewToggle("Animal ESP",    "Track all wildlife",          function(v) S.AnimalESP=v; if not v then CleanAESP() end end)
 SWE.NewToggle("Show Distance", "Display range to target",     function(v) S.ShowDist=v end)
