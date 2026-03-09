@@ -1,6 +1,7 @@
 -- ╔══════════════════════════════════════════════╗
---   MOSAB WESTBOUND  |  GLASS UI  |  v8
---   Dark Navy · Animated · RightCtrl = Hide/Show
+--   MOSAB WESTBOUND  |  GLASS UI  |  v8-NAVY
+--   لون أزرق كحلي — بنيّة v10 الشغّالة
+--   RightCtrl = Hide/Show  |  Drag TitleBar
 -- ╚══════════════════════════════════════════════╝
 
 local Players     = game:GetService("Players")
@@ -32,31 +33,26 @@ local FOVC = Drawing.new("Circle")
 FOVC.Thickness=1.5; FOVC.Filled=false
 FOVC.Color=Color3.fromRGB(30,120,255); FOVC.Transparency=1; FOVC.Visible=false
 
--- ── DARK NAVY COLOR PALETTE ───────────────────
+-- ── NAVY BLUE PALETTE ────────────────────────
 local C = {
-    BG      = Color3.fromRGB(4,6,18),
-    Panel   = Color3.fromRGB(8,12,28),
-    Row     = Color3.fromRGB(12,18,40),
-    Neon    = Color3.fromRGB(20,100,255),
-    NeonBr  = Color3.fromRGB(80,170,255),
-    NeonDk  = Color3.fromRGB(5,18,55),
-    White   = Color3.fromRGB(220,230,255),
-    Muted   = Color3.fromRGB(90,110,160),
-    OFF     = Color3.fromRGB(20,25,50),
+    BG      = Color3.fromRGB(6,10,28),
+    Panel   = Color3.fromRGB(10,16,40),
+    Row     = Color3.fromRGB(14,22,55),
+    Neon    = Color3.fromRGB(40,120,255),
+    NeonBr  = Color3.fromRGB(100,180,255),
+    NeonDk  = Color3.fromRGB(8,22,70),
+    White   = Color3.fromRGB(220,235,255),
+    Muted   = Color3.fromRGB(100,130,180),
+    OFF     = Color3.fromRGB(18,26,60),
     Green   = Color3.fromRGB(40,200,95),
-    Border  = Color3.fromRGB(20,80,200),
-    BorderDk= Color3.fromRGB(8,18,55),
-    Accent  = Color3.fromRGB(0,60,160),
+    Border  = Color3.fromRGB(40,100,220),
+    BorderDk= Color3.fromRGB(12,24,70),
 }
 
 -- ── HELPERS ──────────────────────────────────
-local function tw(o,t,p,style,dir)
-    TW:Create(o,TweenInfo.new(t,style or Enum.EasingStyle.Quad,dir or Enum.EasingDirection.Out),p):Play()
-end
-local function twS(o,t,p) tw(o,t,p,Enum.EasingStyle.Back,Enum.EasingDirection.Out) end
-local function twE(o,t,p) tw(o,t,p,Enum.EasingStyle.Elastic,Enum.EasingDirection.Out) end
-local function twC(o,t,p) tw(o,t,p,Enum.EasingStyle.Cubic,Enum.EasingDirection.Out) end
-
+local function tw(o,t,p) TW:Create(o,TweenInfo.new(t,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),p):Play() end
+local function twS(o,t,p) TW:Create(o,TweenInfo.new(t,Enum.EasingStyle.Back,Enum.EasingDirection.Out),p):Play() end
+local function twE(o,t,p) TW:Create(o,TweenInfo.new(t,Enum.EasingStyle.Elastic,Enum.EasingDirection.Out),p):Play() end
 local function New(cls,props,parent)
     local o=Instance.new(cls)
     for k,v in pairs(props) do o[k]=v end
@@ -64,151 +60,99 @@ local function New(cls,props,parent)
     return o
 end
 local function Corner(p,r) New("UICorner",{CornerRadius=UDim.new(0,r or 10)},p) end
-local function Outline(p,col,sz,tr) New("UIStroke",{Color=col or C.Border,Thickness=sz or 1,Transparency=tr or 0,ApplyStrokeMode=Enum.ApplyStrokeMode.Border},p) end
+local function Outline(p,col,sz,tr) New("UIStroke",{Color=col or C.Border,Thickness=sz or 1,Transparency=tr or 0},p) end
 local function Grad(p,a,b,rot)
     New("UIGradient",{Color=ColorSequence.new{ColorSequenceKeypoint.new(0,a),ColorSequenceKeypoint.new(1,b)},Rotation=rot or 90},p)
 end
-
 local function Pulse(f)
     local s=f.Size
-    tw(f,0.06,{Size=UDim2.new(s.X.Scale,s.X.Offset-4,s.Y.Scale,s.Y.Offset-4)})
-    task.delay(0.06,function() twS(f,0.25,{Size=s}) end)
+    tw(f,0.07,{Size=UDim2.new(s.X.Scale,s.X.Offset-3,s.Y.Scale,s.Y.Offset-3)})
+    task.delay(0.07,function() twS(f,0.22,{Size=s}) end)
 end
 
--- Shimmer effect on a frame
-local function AddShimmer(parent)
-    local sh=New("Frame",{
-        Size=UDim2.new(0,60,1,0),Position=UDim2.new(-0.1,0,0,0),
-        BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=0.85,
-        BorderSizePixel=0,ZIndex=parent.ZIndex+5,ClipsDescendants=false,
-    },parent)
-    Corner(sh,4)
-    New("UIGradient",{
-        Color=ColorSequence.new{
-            ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),
-            ColorSequenceKeypoint.new(0.5,Color3.fromRGB(150,180,255)),
-            ColorSequenceKeypoint.new(1,Color3.new(1,1,1)),
-        },
-        Transparency=NumberSequence.new{
-            NumberSequenceKeypoint.new(0,1),
-            NumberSequenceKeypoint.new(0.5,0.7),
-            NumberSequenceKeypoint.new(1,1),
-        },
-        Rotation=80,
-    },sh)
-    -- Animate shimmer loop
-    local function shimmerLoop()
-        sh.Position=UDim2.new(-0.15,0,0,0)
-        tw(sh,1.4,{Position=UDim2.new(1.15,0,0,0)},Enum.EasingStyle.Sine,Enum.EasingDirection.InOut)
-        task.delay(3.5,shimmerLoop)
+-- ── SHARED SLIDER STATE ──────────────────────
+local _activeSlider  = nil
+local _activeCPSlide = nil
+UIS.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        _activeSlider=nil; _activeCPSlide=nil
     end
-    task.delay(math.random()*2,shimmerLoop)
-end
-
--- Glow pulse on borders
-local function AddGlowPulse(stroke)
-    local function glowLoop()
-        tw(stroke,1.2,{Transparency=0.3},Enum.EasingStyle.Sine,Enum.EasingDirection.InOut)
-        task.delay(1.2,function()
-            tw(stroke,1.2,{Transparency=0.7},Enum.EasingStyle.Sine,Enum.EasingDirection.InOut)
-            task.delay(1.2,glowLoop)
-        end)
+end)
+UIS.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseMovement then
+        if _activeSlider  then _activeSlider(i.Position.X)  end
+        if _activeCPSlide then _activeCPSlide(i.Position.X) end
     end
-    glowLoop()
-end
+end)
 
 -- ── GUI ROOT ─────────────────────────────────
 local Gui=New("ScreenGui",{
-    Name="GlassWestV8",ResetOnSpawn=false,
+    Name="GlassWestNavy",ResetOnSpawn=false,
     ZIndexBehavior=Enum.ZIndexBehavior.Global,
     IgnoreGuiInset=true,
 },LocalPlayer:WaitForChild("PlayerGui"))
 
--- Window
 local Win=New("Frame",{
     Size=UDim2.new(0,600,0,540),
     Position=UDim2.new(0.5,-300,0.5,-270),
-    BackgroundColor3=C.BG,BackgroundTransparency=0.04,
+    BackgroundColor3=C.BG,BackgroundTransparency=0.06,
     BorderSizePixel=0,ClipsDescendants=false,ZIndex=10,
 },Gui)
-Corner(Win,12)
-Grad(Win,Color3.fromRGB(10,14,35),Color3.fromRGB(3,5,15),145)
-local winStroke=Outline(Win,C.Border,1.5,0.3)
-AddGlowPulse(winStroke)
+Corner(Win,10)
+Grad(Win,Color3.fromRGB(12,18,45),Color3.fromRGB(5,8,22),140)
+Outline(Win,C.Border,1.5,0)
 
-
--- Scanline overlay
-local sl=New("Frame",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=9,ClipsDescendants=true},Win)
-for i=1,20 do
-    New("Frame",{
-        Size=UDim2.new(1,0,0,1),
-        Position=UDim2.new(0,0,(i-1)/20,0),
-        BackgroundColor3=Color3.fromRGB(30,80,200),
-        BackgroundTransparency=0.97,BorderSizePixel=0,ZIndex=9,
-    },sl)
-end
-
--- Corner accent dots
-for _,pos in ipairs({{0,0},{1,0},{0,1},{1,1}}) do
-    local dot=New("Frame",{
-        Size=UDim2.new(0,6,0,6),
-        Position=UDim2.new(pos[1],pos[1]==0 and 4 or -10,pos[2],pos[2]==0 and 4 or -10),
-        BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=11,
-    },Win)
-    Corner(dot,3)
-    -- pulse the dots
+-- Border glow pulse animation
+local winStroke=Win:FindFirstChildWhichIsA("UIStroke")
+if winStroke then
     task.spawn(function()
         while true do
-            tw(dot,0.8,{BackgroundTransparency=0.2},Enum.EasingStyle.Sine)
-            task.wait(0.8)
-            tw(dot,0.8,{BackgroundTransparency=0.8},Enum.EasingStyle.Sine)
-            task.wait(0.8)
+            tw(winStroke,1.5,{Transparency=0.5})
+            task.wait(1.5)
+            tw(winStroke,1.5,{Transparency=0})
+            task.wait(1.5)
         end
     end)
 end
 
--- ── TITLEBAR ─────────────────────────────────
+-- Titlebar
 local TBar=New("Frame",{
-    Size=UDim2.new(1,0,0,48),BackgroundColor3=C.NeonDk,
+    Size=UDim2.new(1,0,0,46),BackgroundColor3=C.NeonDk,
     BorderSizePixel=0,ZIndex=11,
 },Win)
-Corner(TBar,12)
-Grad(TBar,Color3.fromRGB(5,30,90),Color3.fromRGB(3,12,40),180)
--- bottom half cover for corner bleed
+Corner(TBar,10)
+Grad(TBar,Color3.fromRGB(10,40,120),Color3.fromRGB(5,18,60),180)
 New("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),
-    BackgroundColor3=Color3.fromRGB(3,12,40),BorderSizePixel=0,ZIndex=11},TBar)
--- bottom glow line
-local tbarLine=New("Frame",{Size=UDim2.new(1,-40,0,1),Position=UDim2.new(0,20,1,-1),
+    BackgroundColor3=Color3.fromRGB(5,18,60),BorderSizePixel=0,ZIndex=11},TBar)
+-- animated bottom line
+local tLine=New("Frame",{Size=UDim2.new(1,-32,0,1),Position=UDim2.new(0,16,1,-1),
     BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=12},TBar)
--- animate line
 task.spawn(function()
     while true do
-        tw(tbarLine,1.5,{BackgroundColor3=C.Neon,BackgroundTransparency=0.3},Enum.EasingStyle.Sine)
-        task.wait(1.5)
-        tw(tbarLine,1.5,{BackgroundColor3=C.NeonBr,BackgroundTransparency=0},Enum.EasingStyle.Sine)
-        task.wait(1.5)
+        tw(tLine,1.2,{BackgroundColor3=C.Neon,BackgroundTransparency=0.4})
+        task.wait(1.2)
+        tw(tLine,1.2,{BackgroundColor3=C.NeonBr,BackgroundTransparency=0})
+        task.wait(1.2)
     end
 end)
 
-AddShimmer(TBar)
-
--- Title icon blip
-local iconBlip=New("Frame",{
-    Size=UDim2.new(0,8,0,8),Position=UDim2.new(0,14,0.5,-4),
+-- blinking status dot
+local sDot=New("Frame",{
+    Size=UDim2.new(0,7,0,7),Position=UDim2.new(0,12,0.5,-3.5),
     BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=14,
 },TBar)
-Corner(iconBlip,4)
+Corner(sDot,4)
 task.spawn(function()
     while true do
-        tw(iconBlip,0.5,{BackgroundColor3=C.Neon,BackgroundTransparency=0.1},Enum.EasingStyle.Sine)
-        task.wait(0.5)
-        tw(iconBlip,0.5,{BackgroundColor3=C.NeonBr,BackgroundTransparency=0},Enum.EasingStyle.Sine)
-        task.wait(0.5)
+        tw(sDot,0.4,{BackgroundTransparency=0.1})
+        task.wait(0.4)
+        tw(sDot,0.4,{BackgroundTransparency=0.85})
+        task.wait(0.4)
     end
 end)
 
 New("TextLabel",{
-    Size=UDim2.new(1,-60,1,0),Position=UDim2.new(0,28,0,0),
+    Size=UDim2.new(1,-50,1,0),Position=UDim2.new(0,24,0,0),
     BackgroundTransparency=1,
     Text="MOSAB WESTBOUND  ·  "..LocalPlayer.Name.."  ·  ONLINE",
     TextColor3=C.White,TextSize=12,Font=Enum.Font.GothamBold,
@@ -218,17 +162,16 @@ New("TextLabel",{
 
 local XBtn=New("TextButton",{
     Size=UDim2.new(0,28,0,28),Position=UDim2.new(1,-36,0.5,-14),
-    BackgroundColor3=C.NeonDk,Text="✕",TextColor3=C.NeonBr,
-    TextSize=14,Font=Enum.Font.GothamBold,
+    BackgroundColor3=C.NeonDk,Text="X",TextColor3=C.White,
+    TextSize=13,Font=Enum.Font.GothamBold,
     BorderSizePixel=0,AutoButtonColor=false,ZIndex=13,
 },TBar)
-Corner(XBtn,7); Outline(XBtn,C.Border,1,0.3)
-XBtn.MouseEnter:Connect(function() tw(XBtn,0.15,{BackgroundColor3=Color3.fromRGB(20,60,180)}) end)
-XBtn.MouseLeave:Connect(function() tw(XBtn,0.15,{BackgroundColor3=C.NeonDk}) end)
+Corner(XBtn,6); Outline(XBtn,C.NeonBr,1,0.4)
+XBtn.MouseEnter:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.Neon}) end)
+XBtn.MouseLeave:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.NeonDk}) end)
 XBtn.MouseButton1Click:Connect(function()
     Pulse(XBtn)
-
-    task.delay(0.15,function() Gui:Destroy() end)
+    task.delay(0.12,function() Gui:Destroy() end)
 end)
 
 -- Drag
@@ -248,33 +191,19 @@ do
     end)
 end
 
--- Hide/Show with animation
-local shown=true
 UIS.InputBegan:Connect(function(i,gp)
     if gp then return end
-    if i.KeyCode==Enum.KeyCode.RightControl then
-        shown=not shown
-        if shown then
-            Win.Visible=true
-
-
-
-            Win.Position=UDim2.new(0.5,-300,0.5,-270)
-        else
-
-            task.delay(0.01,function() Win.Visible=false end)
-        end
-    end
+    if i.KeyCode==Enum.KeyCode.RightControl then Win.Visible=not Win.Visible end
 end)
 
--- ── STATUS BAR ───────────────────────────────
+-- Status bar
 local SBar=New("Frame",{
-    Size=UDim2.new(1,-20,0,30),Position=UDim2.new(0,10,0,54),
+    Size=UDim2.new(1,-20,0,32),Position=UDim2.new(0,10,0,52),
     BackgroundColor3=C.Panel,BackgroundTransparency=0.3,
     BorderSizePixel=0,ZIndex=11,
 },Win)
 Corner(SBar,7); Outline(SBar,C.BorderDk,1,0.2)
-Grad(SBar,Color3.fromRGB(8,18,50),Color3.fromRGB(4,8,25),180)
+Grad(SBar,Color3.fromRGB(10,18,55),Color3.fromRGB(5,10,28),180)
 
 for _,d in ipairs({
     {0,    "THREAT","ELEVATED", C.NeonBr},
@@ -286,19 +215,18 @@ for _,d in ipairs({
     New("TextLabel",{Size=UDim2.new(1,0,0.55,0),Position=UDim2.new(0,0,0.45,0),BackgroundTransparency=1,Text=d[3],TextColor3=d[4],TextSize=11,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Center,ZIndex=11},f)
 end
 
-New("Frame",{Size=UDim2.new(1,-20,0,1),Position=UDim2.new(0,10,0,90),
-    BackgroundColor3=C.BorderDk,BorderSizePixel=0,ZIndex=11},Win)
+New("Frame",{Size=UDim2.new(1,-20,0,1),Position=UDim2.new(0,10,0,90),BackgroundColor3=C.BorderDk,BorderSizePixel=0,ZIndex=11},Win)
 
--- ── TAB BAR ──────────────────────────────────
+-- Tab bar
 local TabBar=New("Frame",{
     Size=UDim2.new(1,-20,0,34),Position=UDim2.new(0,10,0,96),
     BackgroundTransparency=1,BorderSizePixel=0,ZIndex=11,
 },Win)
 New("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,5)},TabBar)
 
--- ── SCROLL ───────────────────────────────────
+-- Scroll
 local Scroll=New("ScrollingFrame",{
-    Size=UDim2.new(1,-20,1,-138),Position=UDim2.new(0,10,0,136),
+    Size=UDim2.new(1,-20,1,-140),Position=UDim2.new(0,10,0,138),
     BackgroundTransparency=1,BorderSizePixel=0,
     ScrollBarThickness=3,ScrollBarImageColor3=C.NeonBr,
     CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
@@ -315,12 +243,12 @@ local CPop=New("Frame",{
     BorderSizePixel=0,Visible=false,ZIndex=900,
 },Gui)
 Corner(CPop,10); Outline(CPop,C.NeonBr,1.5,0)
-Grad(CPop,Color3.fromRGB(8,18,50),Color3.fromRGB(4,8,25),130)
+Grad(CPop,Color3.fromRGB(10,20,60),Color3.fromRGB(5,10,30),130)
 New("TextLabel",{Size=UDim2.new(1,-26,0,18),Position=UDim2.new(0,10,0,4),BackgroundTransparency=1,
     Text="COLOR EDITOR",TextColor3=C.NeonBr,TextSize=11,Font=Enum.Font.GothamBold,
     TextXAlignment=Enum.TextXAlignment.Left,ZIndex=901},CPop)
 local cpX=New("TextButton",{Size=UDim2.new(0,22,0,22),Position=UDim2.new(1,-26,0,2),
-    BackgroundColor3=C.NeonDk,Text="✕",TextColor3=C.NeonBr,TextSize=11,Font=Enum.Font.GothamBold,
+    BackgroundColor3=C.NeonDk,Text="X",TextColor3=C.White,TextSize=11,Font=Enum.Font.GothamBold,
     BorderSizePixel=0,AutoButtonColor=false,ZIndex=902},CPop)
 Corner(cpX,5)
 cpX.MouseButton1Click:Connect(function() CPop.Visible=false end)
@@ -346,18 +274,14 @@ for idx,ch in ipairs({
     local fi=New("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=ch.col,BorderSizePixel=0,ZIndex=902},tr)
     Corner(fi,6)
     local cpBtn=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=903},tr)
-    local cpSliding=false
     local function cpSet(px)
+        if not CPop.Visible then return end
         local pct=math.clamp((px-tr.AbsolutePosition.X)/tr.AbsoluteSize.X,0,1)
         cpRGB[ch.k]=math.floor(pct*255); fi.Size=UDim2.new(pct,0,1,0); valLbl.Text=tostring(cpRGB[ch.k])
         local col=Color3.fromRGB(cpRGB.r,cpRGB.g,cpRGB.b)
         for _,cb in ipairs(cpCBs) do cb(col) end
     end
-    cpBtn.MouseButton1Down:Connect(function() cpSliding=true end)
-    UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then cpSliding=false end end)
-    UIS.InputChanged:Connect(function(i)
-        if cpSliding and i.UserInputType==Enum.UserInputType.MouseMovement then cpSet(i.Position.X) end
-    end)
+    cpBtn.MouseButton1Down:Connect(function(x,_) _activeCPSlide=cpSet; cpSet(x) end)
     cpSliders[ch.k]={tr=tr,fi=fi,vl=valLbl}
 end
 
@@ -376,74 +300,32 @@ local function OpenCP(anchor,curCol,onCh)
     local px=math.clamp(ap.X-120,4,ss.X-244)
     local py=ap.Y+anchor.AbsoluteSize.Y+6
     if py+160>ss.Y then py=ap.Y-160 end
-    CPop.Position=UDim2.new(0,px,0,py)
-    CPop.Size=UDim2.new(0,0,0,152)
-    CPop.Visible=true
-    twE(CPop,0.4,{Size=UDim2.new(0,240,0,152)})
+    CPop.Position=UDim2.new(0,px,0,py); CPop.Visible=true
 end
 
 -- ╔══════════════════════════════════════════════╗
 --   TABS
 -- ╚══════════════════════════════════════════════╝
 local TPages,TBtns={},{}
-local activeTab=nil
-
 local function SwitchTab(name)
-    for n,pg in pairs(TPages) do
-        if n==name then
-            pg.Visible=true
-            -- slide in from right
-            pg.Position=UDim2.new(0.3,0,0,0)
-            pg.BackgroundTransparency=1
-            twC(pg,0.3,{Position=UDim2.new(0,0,0,0)})
-        else
-            pg.Visible=false
-        end
-    end
+    for n,pg in pairs(TPages) do pg.Visible=(n==name) end
     for n,b in pairs(TBtns) do
-        if n==name then
-            tw(b,0.2,{BackgroundColor3=C.Neon,TextColor3=C.White})
-            twE(b,0.35,{Size=UDim2.new(0,115,1,2)})
-            -- underline
-            if b:FindFirstChild("UL") then b.UL.BackgroundTransparency=0 end
-        else
-            tw(b,0.2,{BackgroundColor3=C.NeonDk,TextColor3=C.Muted})
-            tw(b,0.2,{Size=UDim2.new(0,115,1,0)})
-            if b:FindFirstChild("UL") then b.UL.BackgroundTransparency=1 end
-        end
+        if n==name then tw(b,0.15,{BackgroundColor3=C.Neon,TextColor3=C.White})
+        else tw(b,0.15,{BackgroundColor3=C.NeonDk,TextColor3=C.Muted}) end
     end
     CPop.Visible=false
-    activeTab=name
 end
-
 local function MakeTab(name)
     local btn=New("TextButton",{Size=UDim2.new(0,115,1,0),BackgroundColor3=C.NeonDk,
         Text=name,TextColor3=C.Muted,TextSize=12,Font=Enum.Font.GothamBold,
         BorderSizePixel=0,AutoButtonColor=false,ZIndex=12},TabBar)
     Corner(btn,7); Outline(btn,C.BorderDk,1,0.3)
-    -- underline accent
-    local ul=New("Frame",{
-        Name="UL",Size=UDim2.new(0.7,0,0,2),
-        Position=UDim2.new(0.15,0,1,-2),
-        BackgroundColor3=C.NeonBr,BackgroundTransparency=1,
-        BorderSizePixel=0,ZIndex=13,
-    },btn)
-    Corner(ul,1)
-
     local pg=New("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
         BackgroundTransparency=1,Visible=false,BorderSizePixel=0,ZIndex=12},Scroll)
     New("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder},pg)
-
-    btn.MouseEnter:Connect(function()
-        if activeTab~=name then tw(btn,0.12,{BackgroundColor3=Color3.fromRGB(8,40,120)}) end
-    end)
-    btn.MouseLeave:Connect(function()
-        if activeTab~=name then tw(btn,0.12,{BackgroundColor3=C.NeonDk}) end
-    end)
-    btn.MouseButton1Click:Connect(function()
-        Pulse(btn)
-        SwitchTab(name)
-    end)
+    btn.MouseEnter:Connect(function() if not TPages[name].Visible then tw(btn,0.1,{BackgroundColor3=Color3.fromRGB(12,50,140)}) end end)
+    btn.MouseLeave:Connect(function() if not TPages[name].Visible then tw(btn,0.1,{BackgroundColor3=C.NeonDk}) end end)
+    btn.MouseButton1Click:Connect(function() Pulse(btn); SwitchTab(name) end)
     TPages[name]=pg; TBtns[name]=btn; return pg
 end
 
@@ -452,45 +334,33 @@ end
 -- ╚══════════════════════════════════════════════╝
 local function MakeSection(page,title)
     local sec=New("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-        BackgroundColor3=C.Panel,BackgroundTransparency=0.15,
+        BackgroundColor3=C.Panel,BackgroundTransparency=0.2,
         BorderSizePixel=0,ZIndex=13,Parent=page})
-    Corner(sec,10)
-    local secStroke=Outline(sec,C.BorderDk,1,0.2)
-    Grad(sec,Color3.fromRGB(10,16,42),Color3.fromRGB(4,8,20),145)
+    Corner(sec,9); Outline(sec,C.BorderDk,1,0.15)
+    Grad(sec,Color3.fromRGB(12,20,52),Color3.fromRGB(5,10,25),140)
     New("UIPadding",{PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),PaddingTop=UDim.new(0,6),PaddingBottom=UDim.new(0,8)},sec)
     New("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},sec)
 
-    -- Animated border glow on hover
-    sec.MouseEnter:Connect(function()
-        tw(secStroke,0.2,{Color=C.Border,Transparency=0,Thickness=1.5})
-    end)
-    sec.MouseLeave:Connect(function()
-        tw(secStroke,0.3,{Color=C.BorderDk,Transparency=0.3,Thickness=1})
-    end)
-
-    local hdr=New("Frame",{Size=UDim2.new(1,0,0,28),BackgroundColor3=C.NeonDk,BackgroundTransparency=0.05,
+    local hdr=New("Frame",{Size=UDim2.new(1,0,0,26),BackgroundColor3=C.NeonDk,BackgroundTransparency=0.05,
         BorderSizePixel=0,LayoutOrder=0,ZIndex=14,Parent=sec})
-    Corner(hdr,7)
-    Grad(hdr,Color3.fromRGB(5,30,90),Color3.fromRGB(3,12,45),180)
-    Outline(hdr,C.Border,1,0.3)
-    AddShimmer(hdr)
+    Corner(hdr,6)
+    Grad(hdr,Color3.fromRGB(10,40,120),Color3.fromRGB(5,18,65),180)
+    Outline(hdr,C.Border,1,0.4)
 
-    -- Animated dot in header
-    local hdot=New("Frame",{
-        Size=UDim2.new(0,6,0,6),Position=UDim2.new(0,8,0.5,-3),
-        BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=15,
-    },hdr)
+    -- animated dot in header
+    local hdot=New("Frame",{Size=UDim2.new(0,6,0,6),Position=UDim2.new(0,8,0.5,-3),
+        BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=16},hdr)
     Corner(hdot,3)
     task.spawn(function()
         while true do
-            tw(hdot,0.7,{BackgroundTransparency=0.1},Enum.EasingStyle.Sine)
-            task.wait(0.7)
-            tw(hdot,0.7,{BackgroundTransparency=0.8},Enum.EasingStyle.Sine)
-            task.wait(0.7)
+            tw(hdot,0.6,{BackgroundTransparency=0.1})
+            task.wait(0.6)
+            tw(hdot,0.6,{BackgroundTransparency=0.85})
+            task.wait(0.6)
         end
     end)
 
-    New("TextLabel",{Size=UDim2.new(1,-18,1,0),Position=UDim2.new(0,18,0,0),BackgroundTransparency=1,
+    New("TextLabel",{Size=UDim2.new(1,-20,1,0),Position=UDim2.new(0,18,0,0),BackgroundTransparency=1,
         Text=title,TextColor3=C.NeonBr,TextSize=11,Font=Enum.Font.GothamBold,
         TextXAlignment=Enum.TextXAlignment.Left,
         TextStrokeTransparency=0.4,TextStrokeColor3=C.Neon,ZIndex=15},hdr)
@@ -499,19 +369,16 @@ local function MakeSection(page,title)
     local function nxt() order=order+1; return order end
     local function MakeRow(h)
         local r=New("Frame",{Size=UDim2.new(1,0,0,h),BackgroundColor3=C.Row,
-            BackgroundTransparency=0.35,BorderSizePixel=0,LayoutOrder=nxt(),ZIndex=14,Parent=sec})
-        Corner(r,8); Outline(r,C.BorderDk,1,0.55)
+            BackgroundTransparency=0.3,BorderSizePixel=0,LayoutOrder=nxt(),ZIndex=14,Parent=sec})
+        Corner(r,7); Outline(r,C.BorderDk,1,0.5)
         return r
     end
 
-    -- ── TOGGLE ───────────────────────────────
     local function NewToggle(lbl,desc,cb)
         local row=MakeRow(50)
-        -- indicator strip on left
-        local strip=New("Frame",{
-            Size=UDim2.new(0,3,0.7,0),Position=UDim2.new(0,0,0.15,0),
-            BackgroundColor3=C.Muted,BorderSizePixel=0,ZIndex=15,
-        },row)
+        -- left accent strip
+        local strip=New("Frame",{Size=UDim2.new(0,3,0.65,0),Position=UDim2.new(0,0,0.175,0),
+            BackgroundColor3=C.Muted,BorderSizePixel=0,ZIndex=15},row)
         Corner(strip,2)
 
         New("TextLabel",{Size=UDim2.new(1,-68,0,20),Position=UDim2.new(0,12,0,6),BackgroundTransparency=1,
@@ -522,55 +389,38 @@ local function MakeSection(page,title)
             Text=desc,TextColor3=C.Muted,TextSize=10,Font=Enum.Font.Gotham,
             TextXAlignment=Enum.TextXAlignment.Left,ZIndex=15},row)
 
-        local pill=New("Frame",{Size=UDim2.new(0,46,0,24),Position=UDim2.new(1,-56,0.5,-12),
+        local pill=New("Frame",{Size=UDim2.new(0,44,0,22),Position=UDim2.new(1,-54,0.5,-11),
             BackgroundColor3=C.OFF,BorderSizePixel=0,ZIndex=15},row)
-        Corner(pill,12); Outline(pill,C.BorderDk,1,0.4)
-        -- pill inner glow
-        local pillGrad=New("UIGradient",{
-            Color=ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.fromRGB(30,40,80)),ColorSequenceKeypoint.new(1,Color3.fromRGB(10,15,35))},
-            Rotation=90,
-        },pill)
-
-        local knob=New("Frame",{Size=UDim2.new(0,20,0,20),Position=UDim2.new(0,2,0.5,-10),
+        Corner(pill,11); Outline(pill,C.BorderDk,1,0.3)
+        local knob=New("Frame",{Size=UDim2.new(0,18,0,18),Position=UDim2.new(0,2,0.5,-9),
             BackgroundColor3=C.Muted,BorderSizePixel=0,ZIndex=16},pill)
-        Corner(knob,10)
-        -- knob shadow
-        Outline(knob,Color3.fromRGB(0,0,0),1,0.5)
-
+        Corner(knob,9)
         local btn=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=17},row)
         local state=false
-
         btn.MouseEnter:Connect(function()
-            tw(row,0.15,{BackgroundTransparency=0.15})
-            tw(strip,0.15,{BackgroundColor3=state and C.Neon or Color3.fromRGB(60,80,140)})
+            tw(row,0.12,{BackgroundTransparency=0.1})
+            tw(strip,0.12,{BackgroundColor3=state and C.Neon or Color3.fromRGB(50,80,160)})
         end)
         btn.MouseLeave:Connect(function()
-            tw(row,0.15,{BackgroundTransparency=0.35})
-            tw(strip,0.15,{BackgroundColor3=state and C.Neon or C.Muted})
+            tw(row,0.12,{BackgroundTransparency=0.3})
+            tw(strip,0.12,{BackgroundColor3=state and C.Neon or C.Muted})
         end)
-
         btn.MouseButton1Click:Connect(function()
             state=not state; cb(state); Pulse(row)
             if state then
-                tw(pill,0.22,{BackgroundColor3=C.Neon})
-                pillGrad.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.fromRGB(20,80,220)),ColorSequenceKeypoint.new(1,Color3.fromRGB(10,50,160))}
-                twS(knob,0.28,{Position=UDim2.new(1,-22,0.5,-10),BackgroundColor3=C.White})
-                tw(strip,0.2,{BackgroundColor3=C.Neon})
-                -- mini flash on row
-                tw(row,0.05,{BackgroundColor3=Color3.fromRGB(15,30,80)})
-                task.delay(0.1,function() tw(row,0.2,{BackgroundColor3=C.Row}) end)
+                tw(pill,0.18,{BackgroundColor3=C.Neon})
+                twS(knob,0.22,{Position=UDim2.new(1,-20,0.5,-9),BackgroundColor3=C.White})
+                tw(strip,0.15,{BackgroundColor3=C.Neon})
             else
-                tw(pill,0.22,{BackgroundColor3=C.OFF})
-                pillGrad.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.fromRGB(30,40,80)),ColorSequenceKeypoint.new(1,Color3.fromRGB(10,15,35))}
-                twS(knob,0.28,{Position=UDim2.new(0,2,0.5,-10),BackgroundColor3=C.Muted})
-                tw(strip,0.2,{BackgroundColor3=C.Muted})
+                tw(pill,0.18,{BackgroundColor3=C.OFF})
+                twS(knob,0.22,{Position=UDim2.new(0,2,0.5,-9),BackgroundColor3=C.Muted})
+                tw(strip,0.15,{BackgroundColor3=C.Muted})
             end
         end)
     end
 
-    -- ── SLIDER ───────────────────────────────
     local function NewSlider(lbl,desc,maxV,minV,cb)
-        local row=MakeRow(70)
+        local row=MakeRow(68)
         New("TextLabel",{Size=UDim2.new(0.65,0,0,20),Position=UDim2.new(0,12,0,5),BackgroundTransparency=1,
             Text=lbl,TextColor3=C.White,TextSize=13,Font=Enum.Font.GothamBold,
             TextXAlignment=Enum.TextXAlignment.Left,
@@ -581,25 +431,15 @@ local function MakeSection(page,title)
         New("TextLabel",{Size=UDim2.new(1,-24,0,13),Position=UDim2.new(0,12,0,26),BackgroundTransparency=1,
             Text=desc,TextColor3=C.Muted,TextSize=10,Font=Enum.Font.Gotham,
             TextXAlignment=Enum.TextXAlignment.Left,ZIndex=15},row)
-
-        local track=New("Frame",{Size=UDim2.new(1,-24,0,14),Position=UDim2.new(0,12,0,46),
+        local track=New("Frame",{Size=UDim2.new(1,-24,0,16),Position=UDim2.new(0,12,0,44),
             BackgroundColor3=C.NeonDk,BorderSizePixel=0,ZIndex=15},row)
-        Corner(track,7); Outline(track,C.BorderDk,1,0.3)
-        Grad(track,Color3.fromRGB(6,14,40),Color3.fromRGB(3,8,25),180)
-
+        Corner(track,8); Outline(track,C.BorderDk,1,0.4)
         local fill=New("Frame",{Size=UDim2.new(0,0,1,0),BackgroundColor3=C.Neon,BorderSizePixel=0,ZIndex=16},track)
-        Corner(fill,7)
+        Corner(fill,8)
         Grad(fill,C.NeonBr,C.Neon,180)
-
-        local dot=New("Frame",{Size=UDim2.new(0,18,0,18),Position=UDim2.new(0,-9,0.5,-9),
+        local dot=New("Frame",{Size=UDim2.new(0,16,0,16),Position=UDim2.new(0,-8,0.5,-8),
             BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=18},track)
-        Corner(dot,9); Outline(dot,C.NeonBr,1.5,0.2)
-        -- dot inner
-        New("Frame",{Size=UDim2.new(0,8,0,8),Position=UDim2.new(0.5,-4,0.5,-4),
-            BackgroundColor3=C.Neon,BorderSizePixel=0,ZIndex=19},dot)
-        Corner(dot:FindFirstChild("Frame"),4)
-
-        local sliding=false
+        Corner(dot,8); Outline(dot,C.NeonBr,1.5,0.2)
         local function SetPct(px)
             local ap=track.AbsolutePosition; local as=track.AbsoluteSize
             if as.X==0 then return end
@@ -607,35 +447,18 @@ local function MakeSection(page,title)
             local v=math.clamp(math.floor(minV+pct*(maxV-minV)),minV,maxV)
             local rp=(maxV==minV) and 0 or (v-minV)/(maxV-minV)
             fill.Size=UDim2.new(rp,0,1,0)
-            dot.Position=UDim2.new(rp,-9,0.5,-9)
+            dot.Position=UDim2.new(rp,-8,0.5,-8)
             vLbl.Text=tostring(v); cb(v)
         end
-        SetPct(track.AbsolutePosition.X)
-
-        local tBtn=New("TextButton",{Size=UDim2.new(1,10,1,10),Position=UDim2.new(0,-5,0.5,-7),
+        task.defer(function() SetPct(track.AbsolutePosition.X) end)
+        local tBtn=New("TextButton",{Size=UDim2.new(1,10,1,10),Position=UDim2.new(0,-5,0.5,-8),
             BackgroundTransparency=1,Text="",ZIndex=19},track)
-        tBtn.MouseButton1Down:Connect(function(x,_) sliding=true; SetPct(x) end)
-        UIS.InputEnded:Connect(function(i)
-            if i.UserInputType==Enum.UserInputType.MouseButton1 then
-                sliding=false
-                -- snap dot animation
-                twE(dot,0.2,{Size=UDim2.new(0,18,0,18)})
-            end
-        end)
-        UIS.InputChanged:Connect(function(i)
-            if sliding and i.UserInputType==Enum.UserInputType.MouseMovement then
-                SetPct(i.Position.X)
-                dot.Size=UDim2.new(0,22,0,22) -- expand while dragging
-                dot.Position=UDim2.new(dot.Position.X.Scale,-11,0.5,-11)
-            end
-        end)
-
+        tBtn.MouseButton1Down:Connect(function(x,_) _activeSlider=SetPct; SetPct(x) end)
         local hb=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=14},row)
-        hb.MouseEnter:Connect(function() tw(row,0.15,{BackgroundTransparency=0.15}) end)
-        hb.MouseLeave:Connect(function() tw(row,0.15,{BackgroundTransparency=0.35}) end)
+        hb.MouseEnter:Connect(function() tw(row,0.12,{BackgroundTransparency=0.1}) end)
+        hb.MouseLeave:Connect(function() tw(row,0.12,{BackgroundTransparency=0.3}) end)
     end
 
-    -- ── COLOR PICKER ─────────────────────────
     local function NewColorPicker(lbl,desc,defCol,cb)
         local row=MakeRow(50)
         New("TextLabel",{Size=UDim2.new(1,-72,0,20),Position=UDim2.new(0,12,0,6),BackgroundTransparency=1,
@@ -648,16 +471,13 @@ local function MakeSection(page,title)
         local cur=defCol
         local sw=New("Frame",{Size=UDim2.new(0,40,0,32),Position=UDim2.new(1,-50,0.5,-16),
             BackgroundColor3=defCol,BorderSizePixel=0,ZIndex=15},row)
-        Corner(sw,8); Outline(sw,C.NeonBr,1.5,0.2)
+        Corner(sw,7); Outline(sw,C.NeonBr,1.5,0.2)
         local swBtn=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=16},sw)
         swBtn.MouseButton1Click:Connect(function()
             Pulse(sw)
             if CPop.Visible then CPop.Visible=false
             else OpenCP(sw,cur,function(col) cur=col; sw.BackgroundColor3=col; cb(col) end) end
         end)
-        local hb=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=14},row)
-        hb.MouseEnter:Connect(function() tw(row,0.15,{BackgroundTransparency=0.15}) end)
-        hb.MouseLeave:Connect(function() tw(row,0.15,{BackgroundTransparency=0.35}) end)
     end
 
     return {NewToggle=NewToggle,NewSlider=NewSlider,NewColorPicker=NewColorPicker}
@@ -696,7 +516,8 @@ end
 local function IsVis(tp)
     if not tp then return false end
     local c=LocalPlayer.Character; if not c or not c:FindFirstChild("Head") then return false end
-    local p=RaycastParams.new(); p.FilterDescendantsInstances={c}; p.FilterType=Enum.RaycastFilterType.Exclude; p.IgnoreWater=true
+    local p=RaycastParams.new(); p.FilterDescendantsInstances={c}
+    p.FilterType=Enum.RaycastFilterType.Exclude; p.IgnoreWater=true
     local r=workspace:Raycast(Cam.CFrame.Position,tp.Position-Cam.CFrame.Position,p)
     return r and r.Instance:IsDescendantOf(tp.Parent) or (r==nil)
 end
@@ -710,7 +531,6 @@ local function AName(o)
     for _,e in ipairs(m) do if n:find(e[1]) then return pre..e[2] end end; return o.Name
 end
 
--- Aimbot
 local function GetTarget()
     local tp,cd=nil,S.FOV
     local center=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
@@ -742,7 +562,6 @@ local function GetTarget()
     return tp
 end
 
--- ESP
 local function ManageESP(char,text,color,tag,show,dist,isP)
     local rp=isP and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")) or GetRoot(char)
     if not rp then return end
@@ -808,7 +627,6 @@ task.spawn(function() while true do task.wait(0.1)
     end
 end end)
 
--- Noclip
 local noclipConn
 local function SetNoclip(on)
     if noclipConn then noclipConn:Disconnect(); noclipConn=nil end
@@ -834,7 +652,6 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     if S.Noclip then task.wait(0.1); SetNoclip(true) end
 end)
 
--- Render Loop
 Run.RenderStepped:Connect(function()
     FOVC.Visible=S.ShowFOV; FOVC.Radius=S.FOV
     FOVC.Position=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
