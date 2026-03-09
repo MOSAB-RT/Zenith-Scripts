@@ -25,6 +25,7 @@ local S = {
     AnimalESP=false, ShowDist=false, ESPDist=10000, TextSize=12,
     PlayerColor=Color3.fromRGB(0,200,255),
     AnimalColor=Color3.fromRGB(255,200,0),
+    Tracers=false, TracerDot=true,
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
 }
@@ -192,26 +193,34 @@ end)
 
 -- blinking status dot
 local sDot=New("Frame",{
-    Size=UDim2.new(0,7,0,7),Position=UDim2.new(0,12,0.5,-3.5),
-    BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=14,
+    Size=UDim2.new(0,8,0,8),Position=UDim2.new(0,14,0.5,-4),
+    BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=22,
 },TBar)
 Corner(sDot,4)
+-- glow ring behind dot
+local sDotRing=New("Frame",{
+    Size=UDim2.new(0,16,0,16),Position=UDim2.new(0.5,-8,0.5,-8),
+    BackgroundColor3=C.Neon,BackgroundTransparency=0.6,BorderSizePixel=0,ZIndex=21,
+},sDot)
+Corner(sDotRing,8)
 task.spawn(function()
     while true do
-        tw(sDot,0.4,{BackgroundTransparency=0.1})
-        task.wait(0.4)
-        tw(sDot,0.4,{BackgroundTransparency=0.85})
-        task.wait(0.4)
+        tw(sDot,0.35,{BackgroundTransparency=0.05,BackgroundColor3=C.NeonBr})
+        tw(sDotRing,0.35,{BackgroundTransparency=0.4})
+        task.wait(0.35)
+        tw(sDot,0.35,{BackgroundTransparency=0.8,BackgroundColor3=C.Neon})
+        tw(sDotRing,0.35,{BackgroundTransparency=0.85})
+        task.wait(0.35)
     end
 end)
 
 New("TextLabel",{
-    Size=UDim2.new(1,-50,1,0),Position=UDim2.new(0,24,0,0),
+    Size=UDim2.new(1,-56,1,0),Position=UDim2.new(0,30,0,0),
     BackgroundTransparency=1,
     Text="MOSAB WESTBOUND  ·  "..LocalPlayer.Name.."  ·  ONLINE",
     TextColor3=C.White,TextSize=12,Font=Enum.Font.GothamBold,
     TextXAlignment=Enum.TextXAlignment.Left,
-    TextStrokeTransparency=0.4,TextStrokeColor3=C.Neon,ZIndex=12,
+    TextStrokeTransparency=0.4,TextStrokeColor3=C.Neon,ZIndex=20,
 },TBar)
 
 local XBtn=New("TextButton",{
@@ -697,10 +706,11 @@ task.spawn(function() while true do task.wait(1)
     end
 end end)
 
-task.spawn(function() while true do task.wait(0.1)
+task.spawn(function() while true do task.wait(0.15)
     for _,p in ipairs(Players:GetPlayers()) do
         if p==LocalPlayer then continue end
-        local c=p.Character; if not c then continue end
+        local ok,err=pcall(function()
+        local c=p.Character; if not c then return end
         local hum=c:FindFirstChildOfClass("Humanoid")
         local rp=c:FindFirstChild("Head") or c:FindFirstChild("HumanoidRootPart")
         if rp and hum and hum.Health>0 then
@@ -717,6 +727,8 @@ task.spawn(function() while true do task.wait(0.1)
             local b=c:FindFirstChild("GWPLYR",true); if b then b:Destroy() end
             local hl=c:FindFirstChild("GWPH"); if hl then hl:Destroy() end
         end
+        end) -- pcall end
+        if not ok then end
     end
 end end)
 
@@ -745,7 +757,70 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     if S.Noclip then task.wait(0.1); SetNoclip(true) end
 end)
 
+-- ── TRACER + HEAD DOT SYSTEM ────────────────
+local tracerPool = {}  -- [player] = {line, dot}
+local function GetOrMakeTracer(p)
+    if not tracerPool[p] then
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        line.Color     = S.PlayerColor
+        line.Transparency = 0.15
+        line.Visible   = false
+
+        local dot = Drawing.new("Circle")
+        dot.Radius  = 5
+        dot.Filled  = true
+        dot.Color   = S.PlayerColor
+        dot.Transparency = 0
+        dot.Thickness = 1
+        dot.Visible = false
+
+        tracerPool[p] = {line=line, dot=dot}
+    end
+    return tracerPool[p]
+end
+local function CleanTracers()
+    for p,t in pairs(tracerPool) do
+        t.line:Remove(); t.dot:Remove()
+        tracerPool[p]=nil
+    end
+end
+
 Run.RenderStepped:Connect(function()
+    -- ── TRACERS ──
+    local screenBot = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
+    for _,pl in ipairs(Players:GetPlayers()) do
+        if pl == LocalPlayer then continue end
+        local td = GetOrMakeTracer(pl)
+        local ch = pl.Character
+        local head = ch and ch:FindFirstChild("Head")
+        local hum  = ch and ch:FindFirstChildOfClass("Humanoid")
+        if S.Tracers and head and hum and hum.Health > 0 then
+            local pos3, onScreen = Cam:WorldToViewportPoint(head.Position)
+            if onScreen then
+                local sp = Vector2.new(pos3.X, pos3.Y)
+                -- tracer line
+                td.line.From    = screenBot
+                td.line.To      = sp
+                td.line.Color   = S.PlayerColor
+                td.line.Visible = true
+                -- head dot
+                if S.TracerDot then
+                    td.dot.Position    = sp
+                    td.dot.Color       = S.PlayerColor
+                    td.dot.Visible     = true
+                else
+                    td.dot.Visible = false
+                end
+            else
+                td.line.Visible = false
+                td.dot.Visible  = false
+            end
+        else
+            td.line.Visible = false
+            td.dot.Visible  = false
+        end
+    end
     FOVC.Visible=S.ShowFOV; FOVC.Radius=S.FOV
     FOVC.Position=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
     local ap=GetTarget()
@@ -782,6 +857,8 @@ SA.NewToggle("Show FOV Ring",    "Render FOV circle on screen",      function(v)
 SPE.NewToggle("Name ESP",   "Show player username",        function(v) S.PlayerName=v end)
 SPE.NewToggle("Health ESP", "Show HP / Max HP",            function(v) S.PlayerHP=v end)
 SPE.NewToggle("Box ESP",    "Highlight player silhouette", function(v) S.PlayerBox=v end)
+SPE.NewToggle("Tracers",    "Draw lines from screen to players", function(v) S.Tracers=v; if not v then CleanTracers() end end)
+SPE.NewToggle("Tracer Dot", "Show dot on player head",    function(v) S.TracerDot=v end)
 
 SWE.NewToggle("Animal ESP",    "Track all wildlife",          function(v) S.AnimalESP=v; if not v then CleanAESP() end end)
 SWE.NewToggle("Show Distance", "Display range to target",     function(v) S.ShowDist=v end)
