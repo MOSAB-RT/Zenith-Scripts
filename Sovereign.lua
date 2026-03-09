@@ -124,11 +124,10 @@ local Gui=New("ScreenGui",{
     IgnoreGuiInset=true,
 },LocalPlayer:WaitForChild("PlayerGui"))
 
--- Window — start tiny for intro anim
+-- Window
 local Win=New("Frame",{
-    Size=UDim2.new(0,0,0,0),
-    Position=UDim2.new(0.5,0,0.5,0),
-    AnchorPoint=Vector2.new(0.5,0.5),
+    Size=UDim2.new(0,600,0,540),
+    Position=UDim2.new(0.5,-300,0.5,-270),
     BackgroundColor3=C.BG,BackgroundTransparency=0.04,
     BorderSizePixel=0,ClipsDescendants=false,ZIndex=10,
 },Gui)
@@ -137,9 +136,11 @@ Grad(Win,Color3.fromRGB(10,14,35),Color3.fromRGB(3,5,15),145)
 local winStroke=Outline(Win,C.Border,1.5,0.3)
 AddGlowPulse(winStroke)
 
--- Intro: bounce open
+-- Intro: fade + scale in
+Win.BackgroundTransparency=1
 task.defer(function()
-    twE(Win,0.7,{Size=UDim2.new(0,600,0,540),Position=UDim2.new(0.5,-300,0.5,-270)})
+    tw(Win,0.5,{BackgroundTransparency=0.04})
+    twE(Win,0.55,{Size=UDim2.new(0,600,0,540)})
 end)
 
 -- Scanline overlay
@@ -232,9 +233,8 @@ XBtn.MouseEnter:Connect(function() tw(XBtn,0.15,{BackgroundColor3=Color3.fromRGB
 XBtn.MouseLeave:Connect(function() tw(XBtn,0.15,{BackgroundColor3=C.NeonDk}) end)
 XBtn.MouseButton1Click:Connect(function()
     Pulse(XBtn)
-    -- close animation
-    twC(Win,0.35,{Size=UDim2.new(0,0,0,0),Position=UDim2.new(0.5,0,0.5,0)})
-    task.delay(0.38,function() Gui:Destroy() end)
+    tw(Win,0.3,{BackgroundTransparency=1,Position=UDim2.new(0.5,-300,0.6,-270)})
+    task.delay(0.32,function() Gui:Destroy() end)
 end)
 
 -- Drag
@@ -262,10 +262,13 @@ UIS.InputBegan:Connect(function(i,gp)
         shown=not shown
         if shown then
             Win.Visible=true
-            twE(Win,0.5,{Size=UDim2.new(0,600,0,540),Position=UDim2.new(0.5,-300,0.5,-270)})
+            Win.BackgroundTransparency=1
+            Win.Position=UDim2.new(0.5,-300,0.4,-270)
+            tw(Win,0.35,{BackgroundTransparency=0.04})
+            twE(Win,0.4,{Position=UDim2.new(0.5,-300,0.5,-270)})
         else
-            twC(Win,0.3,{Size=UDim2.new(0,600,0,0),Position=UDim2.new(0.5,-300,0.5,-270)})
-            task.delay(0.31,function() Win.Visible=false end)
+            tw(Win,0.25,{BackgroundTransparency=1,Position=UDim2.new(0.5,-300,0.6,-270)})
+            task.delay(0.27,function() Win.Visible=false; Win.Position=UDim2.new(0.5,-300,0.5,-270) end)
         end
     end
 end)
