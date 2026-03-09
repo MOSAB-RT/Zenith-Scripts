@@ -21,13 +21,18 @@ local Cam   = workspace.CurrentCamera
 local S = {
     AimPlayers=false, AimAnimals=false, WallCheck=false,
     SilentAim=false, SilentSmooth=0.15, FOV=150, ShowFOV=false,
+    LockTarget=false,                           -- يثبت الهدف ما يروح
     PlayerName=false, PlayerHP=false, PlayerBox=false,
     AnimalESP=false, ShowDist=false, ESPDist=10000, TextSize=12,
     PlayerColor=Color3.fromRGB(0,200,255),
     AnimalColor=Color3.fromRGB(255,200,0),
-    Tracers=false, TracerDot=true, BoxSize=1,
+    Tracers=false, TracerDot=false,
+    TracerThickness=1.5, TracerTransp=0.15,
+    TracerColor=Color3.fromRGB(0,200,255),
+    BoxSize=1,
     Interact=false, TPWalk=false, TPSpeed=2,
-    FullBright=false, Noclip=false, SpeedBoost=false, SpeedVal=16,
+    FullBright=false, NightMode=false,
+    Noclip=false, SpeedBoost=false, SpeedVal=16,
 }
 
 local FOVC = Drawing.new("Circle")
@@ -232,33 +237,45 @@ local XBtn=New("TextButton",{
 Corner(XBtn,6); Outline(XBtn,C.NeonBr,1,0.4)
 XBtn.MouseEnter:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.Neon}) end)
 XBtn.MouseLeave:Connect(function() tw(XBtn,0.12,{BackgroundColor3=C.NeonDk}) end)
+
+-- forward declaration so FullCleanup can reference it
+local tracerPool = {}
+
 -- ── FULL CLEANUP (X button) ──────────────────
 local function FullCleanup()
-    -- tracers
+    -- tracers + dots (Drawing objects)
     for _,t in pairs(tracerPool) do
         pcall(function() t.line:Remove() end)
         pcall(function() t.dot:Remove()  end)
     end
     -- FOV circle
     pcall(function() FOVC:Remove() end)
-    -- all ESP billboards + highlights on all players
+    -- ESP on all players
     for _,p in ipairs(Players:GetPlayers()) do
         local c=p.Character; if not c then continue end
         for _,tag in ipairs({"GWPLYR","GWPH","GWHP"}) do
-            local obj=c:FindFirstChild(tag,true); if obj then pcall(function() obj:Destroy() end) end
+            local obj=c:FindFirstChild(tag,true)
+            if obj then pcall(function() obj:Destroy() end) end
         end
     end
-    -- animal ESP
+    -- animal ESP — without GetRoot dependency
     for _,fn in ipairs({"Harvestables","Animals","NPCS"}) do
         local f=workspace:FindFirstChild(fn); if not f then continue end
         for _,a in ipairs(f:GetChildren()) do
-            local rp=GetRoot(a); if not rp then continue end
-            local t=rp:FindFirstChild("GWANIM"); if t then pcall(function() t:Destroy() end) end
+            for _,ch in ipairs(a:GetChildren()) do
+                local t=ch:FindFirstChild("GWANIM")
+                if t then pcall(function() t:Destroy() end) end
+            end
+            local t=a:FindFirstChild("GWANIM")
+            if t then pcall(function() t:Destroy() end) end
         end
     end
     -- restore lighting
     pcall(function()
-        Light.ClockTime=6; Light.Brightness=1; Light.GlobalShadows=true
+        Light.ClockTime=6; Light.Brightness=1
+        Light.GlobalShadows=true; Light.FogEnd=100000
+        Light.Ambient=Color3.fromRGB(127,127,127)
+        Light.OutdoorAmbient=Color3.fromRGB(127,127,127)
     end)
     -- restore noclip / speed
     pcall(function()
@@ -671,7 +688,22 @@ local function AName(o)
     for _,e in ipairs(m) do if n:find(e[1]) then return pre..e[2] end end; return o.Name
 end
 
+local _lockedTarget = nil  -- locked part when LockTarget=true
+
+local function IsTargetAlive(part)
+    if not part or not part.Parent then return false end
+    local hum = part.Parent:FindFirstChildOfClass("Humanoid")
+        or (part.Parent.Parent and part.Parent.Parent:FindFirstChildOfClass("Humanoid"))
+    return hum and hum.Health > 0
+end
+
 local function GetTarget()
+    -- if locked, keep same target unless dead/gone
+    if S.LockTarget and _lockedTarget and IsTargetAlive(_lockedTarget) then
+        local pos,vis = Cam:WorldToViewportPoint(_lockedTarget.Position)
+        if vis then return _lockedTarget end
+    end
+    -- find new target
     local tp,cd=nil,S.FOV
     local center=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
     local function chk(part)
@@ -699,6 +731,7 @@ local function GetTarget()
             end
         end
     end
+    if S.LockTarget then _lockedTarget = tp end
     return tp
 end
 
@@ -706,61 +739,71 @@ local function ManageESP(char,text,color,tag,show,dist,isP,hum)
     local rp=isP and (char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")) or GetRoot(char)
     if not rp then return end
     local inRange=isP or (dist<=S.ESPDist)
-    local bb=rp:FindFirstChild(tag)
+
     if show and inRange then
+        -- ── single billboard holds everything ──
+        local bb=rp:FindFirstChild(tag)
         if not bb then
             bb=Instance.new("BillboardGui"); bb.Name=tag; bb.Adornee=rp
-            bb.AlwaysOnTop=true; bb.Size=UDim2.new(0,200,0,50)
-            bb.StudsOffset=Vector3.new(0,3.2,0); bb.Parent=rp
-            local lb=Instance.new("TextLabel",bb); lb.Name="L"
-            lb.BackgroundTransparency=1; lb.Size=UDim2.new(1,0,0.55,0)
-            lb.TextStrokeTransparency=0.3; lb.TextStrokeColor3=Color3.new(0,0,0)
-            lb.Font=Enum.Font.Code; lb.TextYAlignment=Enum.TextYAlignment.Bottom
-        end
-        local lb=bb:FindFirstChild("L")
-        if lb then lb.TextSize=S.TextSize; lb.TextColor3=color; lb.Text=text..(S.ShowDist and ("  ["..dist.."m]") or "") end
+            bb.AlwaysOnTop=true; bb.Size=UDim2.new(0,200,0,72)
+            bb.StudsOffset=Vector3.new(0,2.8,0); bb.Parent=rp
 
-        -- ── HEALTH BAR ──
-        if isP and hum and S.PlayerHP then
-            local hbGui=rp:FindFirstChild("GWHP")
-            if not hbGui then
-                hbGui=Instance.new("BillboardGui"); hbGui.Name="GWHP"; hbGui.Adornee=rp
-                hbGui.AlwaysOnTop=true; hbGui.Size=UDim2.new(0,54,0,10)
-                hbGui.StudsOffset=Vector3.new(0,1.6,0); hbGui.Parent=rp
-                -- bg
-                local bg=Instance.new("Frame",hbGui); bg.Name="BG"
-                bg.Size=UDim2.new(1,0,1,0); bg.BackgroundColor3=Color3.fromRGB(20,20,20)
-                bg.BackgroundTransparency=0.3; bg.BorderSizePixel=0
-                Instance.new("UICorner",bg).CornerRadius=UDim.new(0,3)
-                -- fill
-                local fill=Instance.new("Frame",bg); fill.Name="F"
-                fill.Size=UDim2.new(1,0,1,0); fill.BorderSizePixel=0
-                Instance.new("UICorner",fill).CornerRadius=UDim.new(0,3)
-                -- hp number
-                local num=Instance.new("TextLabel",hbGui); num.Name="N"
-                num.Size=UDim2.new(1,0,0,10); num.Position=UDim2.new(0,0,1,2)
-                num.BackgroundTransparency=1; num.Font=Enum.Font.GothamBold
-                num.TextSize=9; num.TextStrokeTransparency=0.2
-                num.TextStrokeColor3=Color3.new(0,0,0)
-            end
+            -- name label
+            local lb=Instance.new("TextLabel",bb); lb.Name="L"
+            lb.BackgroundTransparency=1
+            lb.Size=UDim2.new(1,0,0,22); lb.Position=UDim2.new(0,0,0,0)
+            lb.TextStrokeTransparency=0.25; lb.TextStrokeColor3=Color3.new(0,0,0)
+            lb.Font=Enum.Font.GothamBold; lb.TextYAlignment=Enum.TextYAlignment.Top
+
+            -- HP bar background
+            local hbg=Instance.new("Frame",bb); hbg.Name="HBG"
+            hbg.Size=UDim2.new(0.7,0,0,7); hbg.Position=UDim2.new(0.15,0,0,26)
+            hbg.BackgroundColor3=Color3.fromRGB(15,15,15); hbg.BackgroundTransparency=0.3
+            hbg.BorderSizePixel=0
+            Instance.new("UICorner",hbg).CornerRadius=UDim.new(0,3)
+            local hfill=Instance.new("Frame",hbg); hfill.Name="F"
+            hfill.Size=UDim2.new(1,0,1,0); hfill.BorderSizePixel=0
+            Instance.new("UICorner",hfill).CornerRadius=UDim.new(0,3)
+
+            -- HP number
+            local hnum=Instance.new("TextLabel",bb); hnum.Name="HN"
+            hnum.BackgroundTransparency=1
+            hnum.Size=UDim2.new(1,0,0,14); hnum.Position=UDim2.new(0,0,0,36)
+            hnum.TextStrokeTransparency=0.3; hnum.TextStrokeColor3=Color3.new(0,0,0)
+            hnum.Font=Enum.Font.GothamBold; hnum.TextSize=9
+        end
+
+        local lb  = bb:FindFirstChild("L")
+        local hbg = bb:FindFirstChild("HBG")
+        local hnum= bb:FindFirstChild("HN")
+
+        -- update name
+        if lb then
+            lb.TextSize=S.TextSize; lb.TextColor3=color
+            lb.Text=text..(S.ShowDist and ("  ["..dist.."m]") or "")
+        end
+
+        -- update HP bar + number
+        local showHP = isP and hum and S.PlayerHP
+        if hbg then hbg.Visible=showHP or false end
+        if hnum then hnum.Visible=showHP or false end
+        if showHP then
             local pct=math.clamp(hum.Health/hum.MaxHealth,0,1)
-            local fill=hbGui:FindFirstChild("BG") and hbGui.BG:FindFirstChild("F")
-            local num=hbGui:FindFirstChild("N")
+            local fill=hbg:FindFirstChild("F")
             if fill then
-                local r=math.floor(255*(1-pct)); local g=math.floor(220*pct)
-                local hpCol=Color3.fromRGB(r,g,40)
-                fill.Size=UDim2.new(pct,0,1,0); fill.BackgroundColor3=hpCol
+                fill.Size=UDim2.new(pct,0,1,0)
+                fill.BackgroundColor3=Color3.fromRGB(
+                    math.floor(255*(1-pct)),
+                    math.floor(200*pct),
+                    40)
             end
-            if num then
-                num.Text=math.floor(hum.Health).."/"..math.floor(hum.MaxHealth)
-                num.TextColor3=color
+            if hnum then
+                hnum.TextColor3=color
+                hnum.Text=math.floor(hum.Health).." / "..math.floor(hum.MaxHealth)
             end
-        else
-            local old=rp:FindFirstChild("GWHP"); if old and not (isP and S.PlayerHP) then old:Destroy() end
         end
     else
-        if bb then bb:Destroy() end
-        local hbGui=rp:FindFirstChild("GWHP"); if hbGui then hbGui:Destroy() end
+        local bb=rp:FindFirstChild(tag); if bb then bb:Destroy() end
     end
 end
 local function CleanAESP()
@@ -839,7 +882,6 @@ LocalPlayer.CharacterAdded:Connect(function(c)
 end)
 
 -- ── TRACER + HEAD DOT SYSTEM ────────────────
-local tracerPool = {}  -- [player] = {line, dot}
 local function GetOrMakeTracer(p)
     if not tracerPool[p] then
         local line = Drawing.new("Line")
@@ -848,12 +890,12 @@ local function GetOrMakeTracer(p)
         line.Transparency = 0.15
         line.Visible   = false
 
-        local dot = Drawing.new("Square")
-        dot.Size      = Vector2.new(10, 10)
+        local dot = Drawing.new("Circle")
+        dot.Radius    = 5
         dot.Filled    = true
         dot.Color     = S.PlayerColor
         dot.Transparency = 0
-        dot.Thickness = 1
+        dot.Thickness = 1.5
         dot.Visible   = false
 
         tracerPool[p] = {line=line, dot=dot}
@@ -862,13 +904,14 @@ local function GetOrMakeTracer(p)
 end
 local function CleanTracers()
     for p,t in pairs(tracerPool) do
-        t.line:Remove(); t.dot:Remove()
+        pcall(function() t.line:Remove() end)
+        pcall(function() t.dot:Remove() end)
         tracerPool[p]=nil
     end
 end
 
 Run.RenderStepped:Connect(function()
-    -- ── TRACERS ──
+    -- ── TRACERS + DOTS ──
     local screenBot = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y)
     for _,pl in ipairs(Players:GetPlayers()) do
         if pl == LocalPlayer then continue end
@@ -876,50 +919,44 @@ Run.RenderStepped:Connect(function()
         local ch = pl.Character
         local head = ch and ch:FindFirstChild("Head")
         local hum  = ch and ch:FindFirstChildOfClass("Humanoid")
-        if S.Tracers and head and hum and hum.Health > 0 then
-            local pos3, onScreen = Cam:WorldToViewportPoint(head.Position)
-            if onScreen then
-                local sp = Vector2.new(pos3.X, pos3.Y)
-                -- tracer line
-                td.line.From    = screenBot
-                td.line.To      = sp
-                td.line.Color   = S.PlayerColor
-                td.line.Visible = true
-                -- head dot (Square centered on head)
-                if S.TracerDot then
-                    td.dot.Position = Vector2.new(pos3.X - 5, pos3.Y - 5)
-                    td.dot.Size     = Vector2.new(10, 10)
-                    td.dot.Color    = S.PlayerColor
-                    td.dot.Visible  = true
-                else
-                    td.dot.Visible = false
-                end
+        local alive = head and hum and hum.Health > 0
+        local pos3, onScreen = alive and Cam:WorldToViewportPoint(head.Position) or Vector3.new(), false
+        if alive then _, onScreen = Cam:WorldToViewportPoint(head.Position) end
+
+        if alive and onScreen then
+            local sp = Vector2.new(pos3.X, pos3.Y)
+            -- tracer line
+            if S.Tracers then
+                td.line.From        = screenBot
+                td.line.To          = sp
+                td.line.Color       = S.TracerColor
+                td.line.Thickness   = S.TracerThickness
+                td.line.Transparency= S.TracerTransp
+                td.line.Visible     = true
             else
                 td.line.Visible = false
-                td.dot.Visible  = false
             end
-        elseif S.TracerDot and not S.Tracers then
-            -- dot only mode (no tracer line)
-            td.line.Visible = false
-            local ch2 = pl.Character
-            local head2 = ch2 and ch2:FindFirstChild("Head")
-            local hum2  = ch2 and ch2:FindFirstChildOfClass("Humanoid")
-            if head2 and hum2 and hum2.Health > 0 then
-                local pos3, onScreen = Cam:WorldToViewportPoint(head2.Position)
-                if onScreen then
-                    td.dot.Position = Vector2.new(pos3.X - 5, pos3.Y - 5)
-                    td.dot.Size     = Vector2.new(10, 10)
-                    td.dot.Color    = S.PlayerColor
-                    td.dot.Visible  = true
-                else td.dot.Visible = false end
-            else td.dot.Visible = false end
+            -- head dot (independent of tracer)
+            if S.TracerDot then
+                td.dot.Position    = sp
+                td.dot.Radius      = 6
+                td.dot.Color       = S.TracerColor
+                td.dot.Transparency= 0
+                td.dot.Visible     = true
+            else
+                td.dot.Visible = false
+            end
         else
             td.line.Visible = false
             td.dot.Visible  = false
         end
     end
+
+    -- FOV circle
     FOVC.Visible=S.ShowFOV; FOVC.Radius=S.FOV
     FOVC.Position=Vector2.new(Cam.ViewportSize.X/2,Cam.ViewportSize.Y/2)
+
+    -- Aimbot
     local ap=GetTarget()
     if ap then
         if UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
@@ -929,14 +966,21 @@ Run.RenderStepped:Connect(function()
             Cam.CFrame=Cam.CFrame:Lerp(CFrame.new(Cam.CFrame.Position,ap.Position),S.SilentSmooth)
         end
     end
+
+    -- TP Walk
     if S.TPWalk then
         local c=LocalPlayer.Character; if c then
             local h=c:FindFirstChildOfClass("Humanoid")
             if h and h.MoveDirection.Magnitude>0 then c:TranslateBy(h.MoveDirection*S.TPSpeed*0.1) end
         end
     end
+
+    -- Lighting
     if S.FullBright then
         Light.ClockTime=14; Light.Brightness=2; Light.GlobalShadows=false; Light.FogEnd=100000
+    elseif S.NightMode then
+        Light.ClockTime=0; Light.Brightness=0.5; Light.GlobalShadows=false
+        Light.Ambient=Color3.fromRGB(50,60,80); Light.OutdoorAmbient=Color3.fromRGB(30,40,60)
     end
 end)
 
@@ -947,6 +991,7 @@ SA.NewToggle("Target Players",   "RMB — Lock onto players",          function(
 SA.NewToggle("Target Animals",   "RMB — Lock onto wildlife",         function(v) S.AimAnimals=v end)
 SA.NewToggle("Wall Check",       "Only aim at visible targets",      function(v) S.WallCheck=v end)
 SA.NewToggle("Silent Fire",      "LMB — Smooth silent aim",          function(v) S.SilentAim=v end)
+SA.NewToggle("Lock Target",      "Don't switch once locked on target",function(v) S.LockTarget=v; if not v then _lockedTarget=nil end end)
 SA.NewSlider("FOV Radius",       "Aim radius in pixels",  800, 10,  function(v) S.FOV=v end)
 SA.NewSlider("Silent Smoothing", "1=instant  50=smooth",  50,  1,   function(v) S.SilentSmooth=v/100 end)
 SA.NewToggle("Show FOV Ring",    "Render FOV circle on screen",      function(v) S.ShowFOV=v end)
@@ -955,8 +1000,11 @@ SPE.NewToggle("Name ESP",   "Show player username",        function(v) S.PlayerN
 SPE.NewToggle("Health ESP", "HP bar + number above head",  function(v) S.PlayerHP=v end)
 SPE.NewToggle("Box ESP",    "Highlight player silhouette", function(v) S.PlayerBox=v end)
 SPE.NewSlider("Box Opacity","Fill density of the box",5,1, function(v) S.BoxSize=v end)
-SPE.NewToggle("Tracers",    "Lines from screen bottom to players", function(v) S.Tracers=v; if not v then CleanTracers() end end)
-SPE.NewToggle("Tracer Dot", "Dot on player head (works alone)", function(v) S.TracerDot=v end)
+SPE.NewToggle("Tracers",    "Lines from bottom to players",function(v) S.Tracers=v; if not v then CleanTracers() end end)
+SPE.NewToggle("Tracer Dot", "Dot on player head (standalone)", function(v) S.TracerDot=v end)
+SPE.NewSlider("Tracer Width",    "Line thickness 1–6",    6,   1,   function(v) S.TracerThickness=v end)
+SPE.NewSlider("Tracer Alpha",    "0=solid  90=faint",     90,  0,   function(v) S.TracerTransp=v/100 end)
+SPE.NewColorPicker("Tracer Color","Color for tracer + dot",S.TracerColor,function(v) S.TracerColor=v end)
 
 SWE.NewToggle("Animal ESP",    "Track all wildlife",          function(v) S.AnimalESP=v; if not v then CleanAESP() end end)
 SWE.NewToggle("Show Distance", "Display range to target",     function(v) S.ShowDist=v end)
@@ -967,7 +1015,8 @@ SVC.NewColorPicker("Player ESP Color","Color for player labels",S.PlayerColor,fu
 SVC.NewColorPicker("Animal ESP Color","Color for animal labels",S.AnimalColor,function(v) S.AnimalColor=v end)
 SVC.NewColorPicker("FOV Ring Color",  "Color of aim circle", FOVC.Color,     function(v) FOVC.Color=v end)
 
-SU.NewToggle("Full Bright",      "Force max lighting",            function(v) S.FullBright=v end)
+SU.NewToggle("Full Bright",      "Force max lighting",            function(v) S.FullBright=v; if v then S.NightMode=false end end)
+SU.NewToggle("Night Mode",       "Dark sky — see players clearly", function(v) S.NightMode=v; if v then S.FullBright=false end end)
 SU.NewToggle("Instant Interact", "Zero hold on prompts",          function(v) S.Interact=v end)
 SU.NewToggle("TP-Walk",          "Teleport movement hack",        function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1, function(v) S.TPSpeed=v end)
