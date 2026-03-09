@@ -136,12 +136,6 @@ Grad(Win,Color3.fromRGB(10,14,35),Color3.fromRGB(3,5,15),145)
 local winStroke=Outline(Win,C.Border,1.5,0.3)
 AddGlowPulse(winStroke)
 
--- Intro: fade + scale in
-Win.BackgroundTransparency=1
-task.defer(function()
-    tw(Win,0.5,{BackgroundTransparency=0.04})
-    twE(Win,0.55,{Size=UDim2.new(0,600,0,540)})
-end)
 
 -- Scanline overlay
 local sl=New("Frame",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=9,ClipsDescendants=true},Win)
@@ -233,8 +227,8 @@ XBtn.MouseEnter:Connect(function() tw(XBtn,0.15,{BackgroundColor3=Color3.fromRGB
 XBtn.MouseLeave:Connect(function() tw(XBtn,0.15,{BackgroundColor3=C.NeonDk}) end)
 XBtn.MouseButton1Click:Connect(function()
     Pulse(XBtn)
-    tw(Win,0.3,{BackgroundTransparency=1,Position=UDim2.new(0.5,-300,0.6,-270)})
-    task.delay(0.32,function() Gui:Destroy() end)
+
+    task.delay(0.15,function() Gui:Destroy() end)
 end)
 
 -- Drag
@@ -262,13 +256,13 @@ UIS.InputBegan:Connect(function(i,gp)
         shown=not shown
         if shown then
             Win.Visible=true
-            Win.BackgroundTransparency=1
-            Win.Position=UDim2.new(0.5,-300,0.4,-270)
-            tw(Win,0.35,{BackgroundTransparency=0.04})
-            twE(Win,0.4,{Position=UDim2.new(0.5,-300,0.5,-270)})
+
+
+
+            Win.Position=UDim2.new(0.5,-300,0.5,-270)
         else
-            tw(Win,0.25,{BackgroundTransparency=1,Position=UDim2.new(0.5,-300,0.6,-270)})
-            task.delay(0.27,function() Win.Visible=false; Win.Position=UDim2.new(0.5,-300,0.5,-270) end)
+
+            task.delay(0.01,function() Win.Visible=false end)
         end
     end
 end)
