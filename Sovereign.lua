@@ -50,7 +50,7 @@ local C = {
 }
 
 -- ── HELPERS ──────────────────────────────────
-local function tw(o,t,p) TW:Create(o,TweenInfo.new(t,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),p):Play() end
+local function tw(o,t,p,style,dir) TW:Create(o,TweenInfo.new(t,style or Enum.EasingStyle.Quad,dir or Enum.EasingDirection.Out),p):Play() end
 local function twS(o,t,p) TW:Create(o,TweenInfo.new(t,Enum.EasingStyle.Back,Enum.EasingDirection.Out),p):Play() end
 local function twE(o,t,p) TW:Create(o,TweenInfo.new(t,Enum.EasingStyle.Elastic,Enum.EasingDirection.Out),p):Play() end
 local function New(cls,props,parent)
@@ -60,7 +60,7 @@ local function New(cls,props,parent)
     return o
 end
 local function Corner(p,r) New("UICorner",{CornerRadius=UDim.new(0,r or 10)},p) end
-local function Outline(p,col,sz,tr) New("UIStroke",{Color=col or C.Border,Thickness=sz or 1,Transparency=tr or 0},p) end
+local function Outline(p,col,sz,tr) local s=Instance.new("UIStroke"); s.Color=col or C.Border; s.Thickness=sz or 1; s.Transparency=tr or 0; s.Parent=p; return s end
 local function Grad(p,a,b,rot)
     New("UIGradient",{Color=ColorSequence.new{ColorSequenceKeypoint.new(0,a),ColorSequenceKeypoint.new(1,b)},Rotation=rot or 90},p)
 end
@@ -68,6 +68,39 @@ local function Pulse(f)
     local s=f.Size
     tw(f,0.07,{Size=UDim2.new(s.X.Scale,s.X.Offset-3,s.Y.Scale,s.Y.Offset-3)})
     task.delay(0.07,function() twS(f,0.22,{Size=s}) end)
+end
+
+-- Shimmer: انعكاس ضوء يمشي على الـ frame
+local function AddShimmer(parent, zidx)
+    local sh=New("Frame",{
+        Size=UDim2.new(0,55,1,0),
+        Position=UDim2.new(-0.12,0,0,0),
+        BackgroundColor3=Color3.new(1,1,1),
+        BackgroundTransparency=0.82,
+        BorderSizePixel=0,
+        ZIndex=zidx or (parent.ZIndex+3),
+        ClipsDescendants=false,
+    },parent)
+    Corner(sh,4)
+    New("UIGradient",{
+        Color=ColorSequence.new{
+            ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),
+            ColorSequenceKeypoint.new(0.5,Color3.fromRGB(160,200,255)),
+            ColorSequenceKeypoint.new(1,Color3.new(1,1,1)),
+        },
+        Transparency=NumberSequence.new{
+            NumberSequenceKeypoint.new(0,1),
+            NumberSequenceKeypoint.new(0.5,0.65),
+            NumberSequenceKeypoint.new(1,1),
+        },
+        Rotation=78,
+    },sh)
+    local function loop()
+        sh.Position=UDim2.new(-0.15,0,0,0)
+        tw(sh,1.3,{Position=UDim2.new(1.15,0,0,0)},Enum.EasingStyle.Sine,Enum.EasingDirection.InOut)
+        task.delay(3+math.random()*1.5, loop)
+    end
+    task.delay(math.random()*2, loop)
 end
 
 -- ── SHARED SLIDER STATE ──────────────────────
@@ -115,6 +148,26 @@ if winStroke then
     end)
 end
 
+-- Corner accent dots
+for _,cfg in ipairs({
+    {UDim2.new(0,5,0,5)},  {UDim2.new(1,-11,0,5)},
+    {UDim2.new(0,5,1,-11)},{UDim2.new(1,-11,1,-11)},
+}) do
+    local dot=New("Frame",{Size=UDim2.new(0,6,0,6),Position=cfg[1],
+        BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=12},Win)
+    Corner(dot,3)
+    local delay=math.random()*1.5
+    task.spawn(function()
+        task.wait(delay)
+        while true do
+            tw(dot,0.45,{BackgroundTransparency=0.1,BackgroundColor3=C.NeonBr})
+            task.wait(0.45)
+            tw(dot,0.45,{BackgroundTransparency=0.85,BackgroundColor3=C.Neon})
+            task.wait(0.45)
+        end
+    end)
+end
+
 -- Titlebar
 local TBar=New("Frame",{
     Size=UDim2.new(1,0,0,46),BackgroundColor3=C.NeonDk,
@@ -124,6 +177,7 @@ Corner(TBar,10)
 Grad(TBar,Color3.fromRGB(10,40,120),Color3.fromRGB(5,18,60),180)
 New("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),
     BackgroundColor3=Color3.fromRGB(5,18,60),BorderSizePixel=0,ZIndex=11},TBar)
+AddShimmer(TBar,14)
 -- animated bottom line
 local tLine=New("Frame",{Size=UDim2.new(1,-32,0,1),Position=UDim2.new(0,16,1,-1),
     BackgroundColor3=C.NeonBr,BorderSizePixel=0,ZIndex=12},TBar)
@@ -300,18 +354,34 @@ local function OpenCP(anchor,curCol,onCh)
     local px=math.clamp(ap.X-120,4,ss.X-244)
     local py=ap.Y+anchor.AbsoluteSize.Y+6
     if py+160>ss.Y then py=ap.Y-160 end
-    CPop.Position=UDim2.new(0,px,0,py); CPop.Visible=true
+    CPop.Position=UDim2.new(0,px,0,py)
+    CPop.Size=UDim2.new(0,10,0,10)
+    CPop.Visible=true
+    twE(CPop,0.45,{Size=UDim2.new(0,240,0,152)})
 end
 
 -- ╔══════════════════════════════════════════════╗
 --   TABS
 -- ╚══════════════════════════════════════════════╝
-local TPages,TBtns={},{}
+local TPages,TBtns,TUnders={},{},{}
 local function SwitchTab(name)
-    for n,pg in pairs(TPages) do pg.Visible=(n==name) end
+    for n,pg in pairs(TPages) do
+        if n==name then
+            pg.Visible=true
+            pg.Position=UDim2.new(0.25,0,0,0)
+            tw(pg,0.28,{Position=UDim2.new(0,0,0,0)},Enum.EasingStyle.Cubic)
+        else
+            pg.Visible=false
+        end
+    end
     for n,b in pairs(TBtns) do
-        if n==name then tw(b,0.15,{BackgroundColor3=C.Neon,TextColor3=C.White})
-        else tw(b,0.15,{BackgroundColor3=C.NeonDk,TextColor3=C.Muted}) end
+        if n==name then
+            tw(b,0.15,{BackgroundColor3=C.Neon,TextColor3=C.White})
+            if TUnders[n] then tw(TUnders[n],0.15,{BackgroundTransparency=0}) end
+        else
+            tw(b,0.15,{BackgroundColor3=C.NeonDk,TextColor3=C.Muted})
+            if TUnders[n] then tw(TUnders[n],0.15,{BackgroundTransparency=1}) end
+        end
     end
     CPop.Visible=false
 end
@@ -320,6 +390,11 @@ local function MakeTab(name)
         Text=name,TextColor3=C.Muted,TextSize=12,Font=Enum.Font.GothamBold,
         BorderSizePixel=0,AutoButtonColor=false,ZIndex=12},TabBar)
     Corner(btn,7); Outline(btn,C.BorderDk,1,0.3)
+    -- underline
+    local ul=New("Frame",{Size=UDim2.new(0.6,0,0,2),Position=UDim2.new(0.2,0,1,-2),
+        BackgroundColor3=C.NeonBr,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=13},btn)
+    Corner(ul,1)
+    TUnders[name]=ul
     local pg=New("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
         BackgroundTransparency=1,Visible=false,BorderSizePixel=0,ZIndex=12},Scroll)
     New("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder},pg)
@@ -336,16 +411,22 @@ local function MakeSection(page,title)
     local sec=New("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
         BackgroundColor3=C.Panel,BackgroundTransparency=0.2,
         BorderSizePixel=0,ZIndex=13,Parent=page})
-    Corner(sec,9); Outline(sec,C.BorderDk,1,0.15)
+    Corner(sec,9)
+    local secStroke=Outline(sec,C.BorderDk,1,0.15)
     Grad(sec,Color3.fromRGB(12,20,52),Color3.fromRGB(5,10,25),140)
     New("UIPadding",{PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),PaddingTop=UDim.new(0,6),PaddingBottom=UDim.new(0,8)},sec)
     New("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},sec)
+
+    -- section border hover glow
+    sec.MouseEnter:Connect(function() tw(secStroke,0.2,{Color=C.Border,Transparency=0,Thickness=1.5}) end)
+    sec.MouseLeave:Connect(function() tw(secStroke,0.3,{Color=C.BorderDk,Transparency=0.2,Thickness=1}) end)
 
     local hdr=New("Frame",{Size=UDim2.new(1,0,0,26),BackgroundColor3=C.NeonDk,BackgroundTransparency=0.05,
         BorderSizePixel=0,LayoutOrder=0,ZIndex=14,Parent=sec})
     Corner(hdr,6)
     Grad(hdr,Color3.fromRGB(10,40,120),Color3.fromRGB(5,18,65),180)
     Outline(hdr,C.Border,1,0.4)
+    AddShimmer(hdr,16)
 
     -- animated dot in header
     local hdot=New("Frame",{Size=UDim2.new(0,6,0,6),Position=UDim2.new(0,8,0.5,-3),
@@ -409,11 +490,14 @@ local function MakeSection(page,title)
             state=not state; cb(state); Pulse(row)
             if state then
                 tw(pill,0.18,{BackgroundColor3=C.Neon})
-                twS(knob,0.22,{Position=UDim2.new(1,-20,0.5,-9),BackgroundColor3=C.White})
+                twS(knob,0.25,{Position=UDim2.new(1,-20,0.5,-9),BackgroundColor3=C.White})
                 tw(strip,0.15,{BackgroundColor3=C.Neon})
+                -- flash row blue
+                tw(row,0.05,{BackgroundColor3=Color3.fromRGB(14,35,90)})
+                task.delay(0.12,function() tw(row,0.22,{BackgroundColor3=C.Row}) end)
             else
                 tw(pill,0.18,{BackgroundColor3=C.OFF})
-                twS(knob,0.22,{Position=UDim2.new(0,2,0.5,-9),BackgroundColor3=C.Muted})
+                twS(knob,0.25,{Position=UDim2.new(0,2,0.5,-9),BackgroundColor3=C.Muted})
                 tw(strip,0.15,{BackgroundColor3=C.Muted})
             end
         end)
@@ -453,7 +537,16 @@ local function MakeSection(page,title)
         task.defer(function() SetPct(track.AbsolutePosition.X) end)
         local tBtn=New("TextButton",{Size=UDim2.new(1,10,1,10),Position=UDim2.new(0,-5,0.5,-8),
             BackgroundTransparency=1,Text="",ZIndex=19},track)
-        tBtn.MouseButton1Down:Connect(function(x,_) _activeSlider=SetPct; SetPct(x) end)
+        tBtn.MouseButton1Down:Connect(function(x,_)
+            _activeSlider=SetPct; SetPct(x)
+            twE(dot,0.25,{Size=UDim2.new(0,22,0,22)})
+        end)
+        -- release: dot snaps back elastic
+        UIS.InputEnded:Connect(function(i)
+            if i.UserInputType==Enum.UserInputType.MouseButton1 and _activeSlider==SetPct then
+                twE(dot,0.3,{Size=UDim2.new(0,16,0,16)})
+            end
+        end)
         local hb=New("TextButton",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="",ZIndex=14},row)
         hb.MouseEnter:Connect(function() tw(row,0.12,{BackgroundTransparency=0.1}) end)
         hb.MouseLeave:Connect(function() tw(row,0.12,{BackgroundTransparency=0.3}) end)
