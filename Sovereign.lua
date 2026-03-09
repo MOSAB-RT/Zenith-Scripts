@@ -29,6 +29,8 @@ local S = {
     Tracers=false, TracerDot=false,
     TracerThickness=1.5, TracerTransp=0.15,
     TracerColor=Color3.fromRGB(0,200,255),
+    DotColor=Color3.fromRGB(255,255,255),
+    CrosshairDot=false, CrosshairColor=Color3.fromRGB(255,255,255), CrosshairSize=5,
     BoxSize=1,
     Interact=false, TPWalk=false, TPSpeed=2,
     FullBright=false, NightMode=false,
@@ -38,6 +40,12 @@ local S = {
 local FOVC = Drawing.new("Circle")
 FOVC.Thickness=1.5; FOVC.Filled=false
 FOVC.Color=Color3.fromRGB(30,120,255); FOVC.Transparency=1; FOVC.Visible=false
+
+-- Crosshair dot (center screen)
+local CrossDot = Drawing.new("Circle")
+CrossDot.Filled=true; CrossDot.Radius=5
+CrossDot.Color=Color3.fromRGB(255,255,255)
+CrossDot.Transparency=0; CrossDot.Thickness=1; CrossDot.Visible=false
 
 -- ── NAVY BLUE PALETTE ────────────────────────
 local C = {
@@ -248,8 +256,9 @@ local function FullCleanup()
         pcall(function() t.line:Remove() end)
         pcall(function() t.dot:Remove()  end)
     end
-    -- FOV circle
+    -- FOV circle + crosshair
     pcall(function() FOVC:Remove() end)
+    pcall(function() CrossDot:Remove() end)
     -- ESP on all players
     for _,p in ipairs(Players:GetPlayers()) do
         local c=p.Character; if not c then continue end
@@ -902,7 +911,24 @@ local function GetOrMakeTracer(p)
     end
     return tracerPool[p]
 end
-local function CleanTracers()
+-- نظف الـ tracers لو لاعب غادر اللعبة أو مات وتغيرت شخصيته
+Players.PlayerRemoving:Connect(function(pl)
+    local t = tracerPool[pl]
+    if t then
+        pcall(function() t.line:Remove() end)
+        pcall(function() t.dot:Remove() end)
+        tracerPool[pl] = nil
+    end
+end)
+Players.PlayerAdded:Connect(function(pl)
+    pl.CharacterRemoving:Connect(function()
+        local t = tracerPool[pl]
+        if t then
+            t.line.Visible = false
+            t.dot.Visible  = false
+        end
+    end)
+end)
     for p,t in pairs(tracerPool) do
         pcall(function() t.line:Remove() end)
         pcall(function() t.dot:Remove() end)
@@ -916,40 +942,57 @@ Run.RenderStepped:Connect(function()
     for _,pl in ipairs(Players:GetPlayers()) do
         if pl == LocalPlayer then continue end
         local td = GetOrMakeTracer(pl)
-        local ch = pl.Character
+        local ch  = pl.Character
         local head = ch and ch:FindFirstChild("Head")
         local hum  = ch and ch:FindFirstChildOfClass("Humanoid")
-        local alive = head and hum and hum.Health > 0
-        local pos3, onScreen = alive and Cam:WorldToViewportPoint(head.Position) or Vector3.new(), false
-        if alive then _, onScreen = Cam:WorldToViewportPoint(head.Position) end
+        -- شرط الحياة: الشخصية موجودة + الهد موجود + الـ HP > 0 + الـ Head لازم part حقيقية
+        local alive = ch and head and hum and hum.Health > 0 and head:IsDescendantOf(workspace)
 
-        if alive and onScreen then
-            local sp = Vector2.new(pos3.X, pos3.Y)
-            -- tracer line
-            if S.Tracers then
-                td.line.From        = screenBot
-                td.line.To          = sp
-                td.line.Color       = S.TracerColor
-                td.line.Thickness   = S.TracerThickness
-                td.line.Transparency= S.TracerTransp
-                td.line.Visible     = true
+        if alive then
+            local pos3, onScreen = Cam:WorldToViewportPoint(head.Position)
+            if onScreen then
+                local sp = Vector2.new(pos3.X, pos3.Y)
+                -- tracer line
+                if S.Tracers then
+                    td.line.From         = screenBot
+                    td.line.To           = sp
+                    td.line.Color        = S.TracerColor
+                    td.line.Thickness    = math.max(0.5, S.TracerThickness)
+                    td.line.Transparency = S.TracerTransp
+                    td.line.Visible      = true
+                else
+                    td.line.Visible = false
+                end
+                -- head dot — لون مستقل
+                if S.TracerDot then
+                    td.dot.Position     = sp
+                    td.dot.Radius       = 6
+                    td.dot.Color        = S.DotColor
+                    td.dot.Transparency = 0
+                    td.dot.Visible      = true
+                else
+                    td.dot.Visible = false
+                end
             else
+                -- خرج من الشاشة — اخفيه فوراً
                 td.line.Visible = false
-            end
-            -- head dot (independent of tracer)
-            if S.TracerDot then
-                td.dot.Position    = sp
-                td.dot.Radius      = 6
-                td.dot.Color       = S.TracerColor
-                td.dot.Transparency= 0
-                td.dot.Visible     = true
-            else
-                td.dot.Visible = false
+                td.dot.Visible  = false
             end
         else
+            -- ميت أو مش موجود — اخفيه فوراً
             td.line.Visible = false
             td.dot.Visible  = false
         end
+    end
+
+    -- ── CROSSHAIR DOT ──
+    if S.CrosshairDot then
+        CrossDot.Visible  = true
+        CrossDot.Radius   = S.CrosshairSize
+        CrossDot.Color    = S.CrosshairColor
+        CrossDot.Position = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
+    else
+        CrossDot.Visible = false
     end
 
     -- FOV circle
@@ -1004,7 +1047,8 @@ SPE.NewToggle("Tracers",    "Lines from bottom to players",function(v) S.Tracers
 SPE.NewToggle("Tracer Dot", "Dot on player head (standalone)", function(v) S.TracerDot=v end)
 SPE.NewSlider("Tracer Width",    "Line thickness 1–6",    6,   1,   function(v) S.TracerThickness=v end)
 SPE.NewSlider("Tracer Alpha",    "0=solid  90=faint",     90,  0,   function(v) S.TracerTransp=v/100 end)
-SPE.NewColorPicker("Tracer Color","Color for tracer + dot",S.TracerColor,function(v) S.TracerColor=v end)
+SPE.NewColorPicker("Tracer Color","Color of the tracer line",S.TracerColor,function(v) S.TracerColor=v end)
+SPE.NewColorPicker("Dot Color",  "Color of the head dot", S.DotColor,    function(v) S.DotColor=v end)
 
 SWE.NewToggle("Animal ESP",    "Track all wildlife",          function(v) S.AnimalESP=v; if not v then CleanAESP() end end)
 SWE.NewToggle("Show Distance", "Display range to target",     function(v) S.ShowDist=v end)
@@ -1017,6 +1061,9 @@ SVC.NewColorPicker("FOV Ring Color",  "Color of aim circle", FOVC.Color,     fun
 
 SU.NewToggle("Full Bright",      "Force max lighting",            function(v) S.FullBright=v; if v then S.NightMode=false end end)
 SU.NewToggle("Night Mode",       "Dark sky — see players clearly", function(v) S.NightMode=v; if v then S.FullBright=false end end)
+SU.NewToggle("Crosshair Dot",    "Dot in center of screen",       function(v) S.CrosshairDot=v end)
+SU.NewSlider("Crosshair Size",   "Dot radius 2–12",  12, 2,       function(v) S.CrosshairSize=v end)
+SU.NewColorPicker("Crosshair Color","Center dot color",S.CrosshairColor,function(v) S.CrosshairColor=v; CrossDot.Color=v end)
 SU.NewToggle("Instant Interact", "Zero hold on prompts",          function(v) S.Interact=v end)
 SU.NewToggle("TP-Walk",          "Teleport movement hack",        function(v) S.TPWalk=v end)
 SU.NewSlider("TP Speed",         "TP-Walk speed multiplier",15,1, function(v) S.TPSpeed=v end)
